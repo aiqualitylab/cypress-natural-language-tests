@@ -44,16 +44,8 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          else
-            echo "requirements.txt not found, installing common dependencies"
-            pip install langgraph langchain-openai langchain-community langchain chromadb python-dotenv
-          fi
-          
-          # Verify installations
-          python -c "import langchain; print('langchain installed:', langchain.__version__)"
-          python -c "import langgraph; print('langgraph installed')"
+          pip install -r requirements.txt
+          echo "Python packages installed successfully"
       
       - name: Install Node dependencies
         run: npm install
@@ -92,7 +84,8 @@ jobs:
           # Build the command arguments
           ARGS=""
           while IFS= read -r line; do
-            # Skip empty lines
+            # Skip empty lines and trim whitespace
+            line=$(echo "$line" | xargs)
             if [ -n "$line" ]; then
               ARGS="$ARGS \"$line\""
             fi
