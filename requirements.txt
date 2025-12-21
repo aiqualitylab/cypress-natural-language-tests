@@ -1,8 +1,5 @@
-langchain==0.1.20
-langchain-core==0.1.52
-langchain-text-splitters==0.0.1
-langchain-openai==0.1.7
-langchain-community==0.0.38
-langgraph==0.0.32
-chromadb==0.4.24
-python-dotenv==1.0.1
+langgraph
+langchain-openai
+langchain-community
+chromadb
+python-dotenv
