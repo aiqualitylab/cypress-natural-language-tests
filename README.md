@@ -194,7 +194,7 @@ The tool uses LangGraph to orchestrate the following steps:
 
 ## GitHub Copilot Integration
 
-This repository includes GitHub Copilot instructions and skills to help you work more efficiently with AI assistance. See [GITHUB_COPILOT_SETUP.md](.github/GITHUB_COPILOT_SETUP.md) for details.
+This repository includes GitHub Copilot instructions and skills to help you work more efficiently with AI assistance.
 
 ### Available Copilot Skills
 
