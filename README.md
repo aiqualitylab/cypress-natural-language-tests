@@ -4,26 +4,26 @@ An AI-powered tool that generates Cypress end-to-end tests from natural language
 
 ## Features
 
-- 🤖 **AI-Powered**: Converts natural language requirements into working Cypress tests
-- 📚 **Document Context**: Optional vector store integration for additional context from documentation
-- 🔄 **Workflow Management**: Uses LangGraph for structured test generation pipeline
-- ⚡ **Auto-Run**: Optionally runs generated tests immediately with Cypress
-- 📁 **Organized Output**: Generates timestamped, descriptively named test files
+* 🤖 **AI-Powered**: Converts natural language requirements into working Cypress tests
+* 📚 **Document Context**: Optional vector store integration for additional context from documentation
+* 🔄 **Workflow Management**: Uses LangGraph for structured test generation pipeline
+* ⚡ **Auto-Run**: Optionally runs generated tests immediately with Cypress
+* 📁 **Organized Output**: Generates timestamped, descriptively named test files
 
 ## Prerequisites
 
-- **Node.js** (v14 or higher)
-- **Python** (v3.8 or higher)
-- **OpenAI API Key**
-- **Cypress** (installed in your project)
+* **Node.js** (v14 or higher)
+* **Python** (v3.8 or higher)
+* **OpenAI API Key**
+* **Cypress** (installed in your project)
 
 ## Installation
 
 ### 1. Clone and Setup Python Environment
 
 ```bash
-git clone https://github.com/aiqualitylab/AI-Powered-Cypress-Framework.git
-cd AI-Powered-Cypress-Framework
+git clone https://github.com/aiqualitylab/cypress-natural-language-tests.git
+cd cypress-natural-language-tests
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
@@ -34,9 +34,9 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Create a `requirements.txt` file with:
+The `requirements.txt` includes:
 
-```txt
+```
 langgraph
 langchain-openai
 langchain-community
@@ -49,7 +49,7 @@ python-dotenv
 
 Create a `.env` file in the project root:
 
-```bash
+```
 OPENAI_API_KEY=your_openai_api_key_here
 ```
 
@@ -73,7 +73,7 @@ python qa_automation.py "Test user login with valid credentials" "Test login wit
 ### Command Line Arguments
 
 | Argument | Description | Default |
-|----------|-------------|---------|
+| --- | --- | --- |
 | `requirements` | One or more test requirements (positional) | Required |
 | `--out` | Output directory for generated specs | `cypress/e2e` |
 | `--run` | Run Cypress tests after generation | `false` |
@@ -145,6 +145,7 @@ describe('User Login', () => {
 ## File Naming Convention
 
 Generated files follow this pattern:
+
 ```
 {sequence}_{slugified-requirement}_{timestamp}.cy.js
 ```
@@ -190,3 +191,31 @@ The tool uses LangGraph to orchestrate the following steps:
 2. **BuildVectorStore** - Index documentation (if provided)
 3. **GenerateTests** - Create Cypress tests using AI
 4. **RunCypress** - Execute tests (if requested)
+
+## GitHub Copilot Integration
+
+This repository includes GitHub Copilot instructions and skills to help you work more efficiently with AI assistance. See [GITHUB_COPILOT_SETUP.md](.github/GITHUB_COPILOT_SETUP.md) for details.
+
+### Available Copilot Skills
+
+- **Cypress AI Test Generation**: Specialized knowledge for working with the test generation pipeline
+- **LangGraph Workflow Development**: Comprehensive guide for building and debugging workflows
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+MIT License
+
+## Related Projects
+
+Check out more AI-powered testing projects at [@aiqualitylab](https://github.com/aiqualitylab)
+
+## About
+
+This project generates Cypress E2E tests automatically from natural language requirements using OpenAI GPT, LangChain, and LangGraph.
+
+**Author**: ([@aiqualitylab](https://github.com/aiqualitylab))  
+**Medium**: [AQE Publication](https://medium.com/ai-in-quality-assurance)
