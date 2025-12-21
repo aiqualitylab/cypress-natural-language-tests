@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       requirements:
-        description: 'Test requirements (one per line or comma-separated)'
+        description: 'Test requirements (one per line)'
         required: true
         default: |
           Test user login with valid credentials
@@ -60,37 +60,44 @@ jobs:
           restore-keys: |
             cypress-${{ runner.os }}-cypress-
       
-      - name: Parse requirements (for manual trigger)
-        id: parse_requirements
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          REQUIREMENTS="${{ github.event.inputs.requirements }}"
-          PARSED=$(echo "$REQUIREMENTS" | tr '\n,' ' ' | sed 's/  */ /g' | sed 's/\([^"]\+\)/"\1"/g')
-          echo "requirements=$PARSED" >> $GITHUB_OUTPUT
-      
-      - name: Set default requirements (for push/PR)
-        id: default_requirements
-        if: github.event_name != 'workflow_dispatch'
-        run: |
-          echo 'requirements="Test login functionality with valid credentials" "Test login with invalid credentials"' >> $GITHUB_OUTPUT
-      
       - name: Generate and run Cypress tests using AI
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
+          # Create requirements file
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            REQS="${{ steps.parse_requirements.outputs.requirements }}"
+            # Manual trigger - use input requirements
+            cat > requirements.txt << 'EOF'
+          ${{ github.event.inputs.requirements }}
+          EOF
             RUN_FLAG="${{ github.event.inputs.run_tests }}"
           else
-            REQS="${{ steps.default_requirements.outputs.requirements }}"
+            # Automatic trigger (push/PR) - use default requirements
+            cat > requirements.txt << 'EOF'
+          Test login functionality with valid credentials
+          Test login with invalid credentials
+          EOF
             RUN_FLAG="true"
           fi
           
+          # Build the command arguments
+          ARGS=""
+          while IFS= read -r line; do
+            # Skip empty lines
+            if [ -n "$line" ]; then
+              ARGS="$ARGS \"$line\""
+            fi
+          done < requirements.txt
+          
+          # Add flags
           if [ "$RUN_FLAG" == "true" ]; then
-            eval python qa_automation.py $REQS --run --out cypress/e2e/generated
-          else
-            eval python qa_automation.py $REQS --out cypress/e2e/generated
+            ARGS="$ARGS --run"
           fi
+          ARGS="$ARGS --out cypress/e2e/generated"
+          
+          # Run the command
+          echo "Executing: python qa_automation.py $ARGS"
+          eval python qa_automation.py $ARGS
       
       - name: Upload generated test files
         uses: actions/upload-artifact@v4
