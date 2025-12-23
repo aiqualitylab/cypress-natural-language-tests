@@ -9,6 +9,7 @@ import re
 import json
 import argparse
 from datetime import datetime
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
@@ -16,7 +17,7 @@ from dataclasses import dataclass
 from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.documents import Document
 
