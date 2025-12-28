@@ -416,4 +416,12 @@ This project generates Cypress E2E tests automatically from natural language req
 
 ---
 
+🎁 **And this is just the beginning!** I have tons of awesome upgrades planned that will take this framework to the next level.
+
+Since I'm building this solo, new features will roll out in phases — but I promise, **I won't disappoint my followers!** 💪
+
+⭐ **Star** and 🍴 **Fork** this repo to stay updated!
+
+Follow my Medium profile for feature announcements, tutorials, and behind-the-scenes updates: [Let's Automate Medium](https://aiqualityengineer.com/) / [AQE Publication](https://medium.com/ai-in-quality-assurance)
+
 **Happy Testing!** 🎉
