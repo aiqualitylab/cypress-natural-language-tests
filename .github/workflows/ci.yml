@@ -2,182 +2,79 @@ name: AI-Powered Cypress Test Generation and Execution
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main]
   workflow_dispatch:
     inputs:
       requirements:
-        description: 'Test requirements (one per line)'
+        description: 'Test requirements (comma separated)'
         required: true
-        default: |
-          Test user login with valid credentials
-          Test login with invalid credentials
-          Test login form validation
-      run_tests:
-        description: 'Run generated tests immediately'
-        required: false
-        default: 'true'
-        type: choice
-        options:
-          - 'true'
-          - 'false'
+        default: 'Test user login with valid credentials, Test login with invalid credentials, Test login form validation'
 
 jobs:
-  generate-and-run-tests:
+  test:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout repository
+      # 1. Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
-      
+
+      # 2. Setup
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
-      
+          node-version: '20'
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
-      - name: Install Python dependencies
+
+      # 3. Install
+      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           pip install -r requirements.txt
-          echo "✅ Python packages installed successfully"
-      
-      - name: Install Node dependencies
-        run: npm install
-      
-      - name: Verify Cypress installation
-        run: npx cypress verify
-      
-      - name: Cache Cypress binary
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/Cypress
-          key: cypress-${{ runner.os }}-cypress-${{ hashFiles('package.json') }}
-          restore-keys: |
-            cypress-${{ runner.os }}-cypress-
-      
-      - name: Generate Cypress tests using AI
+          npm install
+
+      # 4. Generate tests
+      - name: Generate Cypress tests
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          # Create requirements file
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            # Manual trigger - use input requirements
-            cat > test_requirements.txt << 'EOF'
-          ${{ github.event.inputs.requirements }}
-          EOF
-            RUN_FLAG="${{ github.event.inputs.run_tests }}"
+            REQS="${{ github.event.inputs.requirements }}"
           else
-            # Automatic trigger (push/PR) - use default requirements
-            cat > test_requirements.txt << 'EOF'
-          Test login functionality with valid credentials
-          Test login with invalid credentials
-          EOF
-            RUN_FLAG="true"
+            REQS="Test user login with valid credentials, Test login with invalid credentials, Test login form validation"
           fi
           
-          # Build the command arguments
-          ARGS=""
-          while IFS= read -r line; do
-            # Skip empty lines and trim whitespace
-            line=$(echo "$line" | xargs)
-            if [ -n "$line" ]; then
-              ARGS="$ARGS \"$line\""
-            fi
-          done < test_requirements.txt
-          
-          # Only generate tests (don't run yet - we'll run separately)
-          ARGS="$ARGS --out cypress/e2e/generated"
-          
-          # Run the command
-          echo "Executing: python qa_automation.py $ARGS"
-          eval python qa_automation.py $ARGS
-          
-          # Store run flag for next step
-          echo "RUN_TESTS=$RUN_FLAG" >> $GITHUB_ENV
-      
-      - name: List generated test files
-        run: |
-          echo "Generated test files:"
-          if [ -d "cypress/e2e/generated" ]; then
-            ls -lah cypress/e2e/generated/
-          else
-            echo "No generated directory found"
-          fi
-      
+          python qa_automation.py $(echo "$REQS" | sed 's/,/" "/g' | sed 's/^/"/' | sed 's/$/"/')
+
+      # 5. Run tests
       - name: Run Cypress tests
-        if: env.RUN_TESTS == 'true'
-        run: |
-          if [ -d "cypress/e2e/generated" ] && [ "$(ls -A cypress/e2e/generated/*.cy.js 2>/dev/null)" ]; then
-            echo "Running Cypress on generated tests..."
-            npx cypress run --spec "cypress/e2e/generated/**/*.cy.js"
-          else
-            echo "No test files to run"
-            exit 0
-          fi
+        id: tests
         continue-on-error: true
-      
-      - name: Upload generated test files
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: generated-cypress-tests
-          path: cypress/e2e/generated/**/*.cy.js
-          retention-days: 30
-          if-no-files-found: warn
-      
-      - name: Upload Cypress screenshots (on failure)
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: cypress-screenshots
-          path: cypress/screenshots
-          retention-days: 7
-          if-no-files-found: ignore
-      
-      - name: Upload Cypress videos
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: cypress-videos
-          path: cypress/videos
-          retention-days: 7
-          if-no-files-found: ignore
-      
-      - name: Display test summary
-        if: always()
         run: |
-          echo "📊 Test Generation Summary"
-          echo "=========================="
-          
-          if [ -d "cypress/e2e/generated" ]; then
-            FILE_COUNT=$(find cypress/e2e/generated -name "*.cy.js" 2>/dev/null | wc -l)
-            echo "✅ Generated test files: $FILE_COUNT"
-            echo ""
-            echo "Generated files:"
-            find cypress/e2e/generated -name "*.cy.js" 2>/dev/null | while read file; do
-              echo "  - $(basename $file)"
-            done
-          else
-            echo "⚠️  No test files generated"
-          fi
-          
-          echo ""
-          if [ "${{ env.RUN_TESTS }}" == "true" ]; then
-            if [ -d "cypress/videos" ] && [ "$(ls -A cypress/videos 2>/dev/null)" ]; then
-              VIDEO_COUNT=$(ls cypress/videos 2>/dev/null | wc -l)
-              echo "📹 Videos generated: $VIDEO_COUNT"
-            fi
-            
-            if [ -d "cypress/screenshots" ] && [ "$(ls -A cypress/screenshots 2>/dev/null)" ]; then
-              SCREENSHOT_COUNT=$(find cypress/screenshots -name "*.png" 2>/dev/null | wc -l)
-              echo "📸 Screenshots captured: $SCREENSHOT_COUNT"
-            fi
-          else
-            echo "ℹ️  Tests were not executed (run_tests=false)"
-          fi
+          npx cypress run --spec "cypress/e2e/generated/**/*.cy.js" 2>&1 | tee test-output.log
+
+      # 6. AI Failure Analysis
+      - name: AI Failure Analysis
+        if: steps.tests.outcome == 'failure'
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          echo "Analyzing failures with AI..."
+          python qa_automation.py --analyze -f test-output.log
+
+      # 7. Upload results
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            cypress/e2e/generated/
+            cypress/screenshots/
+            cypress/videos/
+            test-output.log
