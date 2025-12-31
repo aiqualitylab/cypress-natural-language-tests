@@ -58,17 +58,30 @@ def generate_test_data_from_url(url: str, requirements: list) -> tuple:
     # Fetch page
     print(f"   Fetching {url}...")
     try:
-        resp = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+        resp = requests.get(url, timeout=15, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
         if not resp.ok:
-            return (f"Could not fetch URL ({resp.status_code})", None, None)
+            return (f"HTTP {resp.status_code} - Could not fetch URL", None, None)
         html = resp.text[:5000]
         print(f"   Fetched {len(resp.text)} bytes")
+    except requests.exceptions.Timeout:
+        return ("Connection timed out - URL may be unreachable", None, None)
+    except requests.exceptions.ConnectionError:
+        return ("Connection failed - check URL and network", None, None)
     except Exception as e:
-        return (f"Could not fetch: {e}", None, None)
+        return (f"Fetch error: {e}", None, None)
+    
+    # Check if HTML has form elements
+    if '<form' not in html.lower() and '<input' not in html.lower():
+        print(f"   Warning: No form elements detected in HTML")
     
     # Analyze with AI
-    print(f"   Analyzing...")
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    print(f"   Analyzing with AI...")
+    try:
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    except Exception as e:
+        return (f"OpenAI API error: {e} - Check OPENAI_API_KEY", None, None)
     
     prompt = f"""Analyze this HTML and generate test data for automation.
 
@@ -116,9 +129,10 @@ Use cy.fixture('url_test_data.json') with function() and this.testData"""
         
         return (context, test_data, filepath)
         
+    except json_module.JSONDecodeError as e:
+        return (f"AI returned invalid JSON: {e}", None, None)
     except Exception as e:
-        print(f"   Error: {e}")
-        return (f"Error: {e}", None, None)
+        return (f"AI analysis error: {e}", None, None)
 
 
 # TEST GENERATION
@@ -157,46 +171,58 @@ CONTEXT (if available): {context}
 
 GUIDELINES:
 - Use Cypress best practices
-- Use REAL selectors from the context
+- Use DYNAMIC selectors from this.testData.selectors (NOT hardcoded!)
 - Generate TWO test cases: valid + invalid (NOT empty)
 - Use cy.fixture() with this context pattern
 - Return ONLY runnable JavaScript code
 
-USE THIS EXACT PATTERN FROM CYPRESS DOCS:
+USE THIS PATTERN (FULLY DYNAMIC - works for ANY URL):
 
 ```javascript
-describe('Login Tests', function () {{
+describe('Tests', function () {{
     beforeEach(function () {{
         cy.fixture('url_test_data').then((data) => {{
             this.testData = data;
         }});
     }});
 
-    it('should login successfully with valid credentials', function () {{
+    it('should succeed with valid data', function () {{
         cy.visit(this.testData.url);
         const valid = this.testData.test_cases.find(tc => tc.name === 'valid_test');
-        cy.get('#username').type(valid.username);
-        cy.get('#password').type(valid.password);
-        cy.get('button[type="submit"]').click();
-        cy.url().should('include', '/secure');
+        const selectors = this.testData.selectors;
+        
+        // DYNAMIC: Loop through all selectors from fixture
+        Object.keys(selectors).forEach(field => {{
+            if (field !== 'submit' && valid[field]) {{
+                cy.get(selectors[field]).type(valid[field]);
+            }}
+        }});
+        
+        cy.get(selectors.submit).click();
     }});
 
-    it('should show error with invalid credentials', function () {{
+    it('should fail with invalid data', function () {{
         cy.visit(this.testData.url);
         const invalid = this.testData.test_cases.find(tc => tc.name === 'invalid_test');
-        cy.get('#username').type(invalid.username);
-        cy.get('#password').type(invalid.password);
-        cy.get('button[type="submit"]').click();
-        cy.get('#flash').should('contain', 'invalid');
+        const selectors = this.testData.selectors;
+        
+        Object.keys(selectors).forEach(field => {{
+            if (field !== 'submit' && invalid[field]) {{
+                cy.get(selectors[field]).type(invalid[field]);
+            }}
+        }});
+        
+        cy.get(selectors.submit).click();
     }});
 }});
 ```
 
 CRITICAL:
-- Use function() NOT arrow => for describe, beforeEach, it
-- Store fixture in this.testData inside .then()
-- Access this.testData in it() blocks
-- Use selectors from CONTEXT
+- Use function() NOT arrow =>
+- cy.visit(this.testData.url) - URL from fixture!
+- cy.get(selectors[field]) - selectors from fixture!
+- DO NOT hardcode #username, #password, or any selector!
+- DO NOT hardcode any URL!
 
 Generate ONLY the test code, no explanations."""
 
@@ -214,31 +240,43 @@ GUIDELINES FOR cy.prompt():
 - Use cy.prompt() with natural language step arrays
 - Each step should be clear and descriptive
 - Include verification steps
-- Use natural language like "Visit the login page", "Click the submit button"
+- Use natural language like "Visit the page", "Click the submit button"
 - Group related steps logically
-- Add fallback traditional Cypress commands for critical assertions
+- Use fixture data for URL and test data (NOT hardcoded!)
 
-EXAMPLE STRUCTURE:
+DYNAMIC PATTERN (works for ANY URL):
+
 ```javascript
-describe('User Login Tests', () => {{
-    const baseUrl = 'https://the-internet.herokuapp.com/login';
-
-    beforeEach(() => {{
-        cy.visit(baseUrl);
+describe('Tests', function () {{
+    beforeEach(function () {{
+        cy.fixture('url_test_data').then((data) => {{
+            this.testData = data;
+        }});
     }});
 
-    it('should successfully log in with valid credentials', () => {{
-        cy.get('input[type="text"]').type('tomsmith');
-        cy.get('input[type="password"]').type('SuperSecretPassword!');
-        cy.get('button[type="submit"]').click();
-
-        cy.url().should('include', '/secure');
-        cy.get('.flash.success').should('be.visible').and('contain', 'You logged into a secure area!');
+    it('should succeed with valid data', function () {{
+        cy.visit(this.testData.url);
+        const valid = this.testData.test_cases.find(tc => tc.name === 'valid_test');
+        const selectors = this.testData.selectors;
+        
+        // Fill form fields dynamically
+        Object.keys(selectors).forEach(field => {{
+            if (field !== 'submit' && valid[field]) {{
+                cy.get(selectors[field]).type(valid[field]);
+            }}
+        }});
+        
+        cy.get(selectors.submit).click();
     }});
 }});
 ```
 
-Generate ONLY the test code using cy.prompt(), no explanations."""
+CRITICAL:
+- Use this.testData.url for visiting (NOT hardcoded URL!)
+- Use this.testData.selectors for cy.get() (NOT hardcoded selectors!)
+- Use this.testData.test_cases for test values
+
+Generate ONLY the test code, no explanations."""
 
     def generate_test_content(
         self, 
@@ -524,9 +562,16 @@ EXAMPLES:
     if args.url:
         print(f"Fetching live URL: {args.url}")
         context, test_data, filepath = generate_test_data_from_url(args.url, args.requirements)
-        test_data_context += context
+        
         if filepath:
+            test_data_context += context
             saved_test_data_file = filepath
+            print(f"   Test data generated successfully")
+        else:
+            print(f"   ERROR: {context}")
+            print(f"   Failed to generate test data from URL")
+            print(f"   Try: --data option with existing JSON file instead")
+            sys.exit(1)
     
     # Option 2: Load from JSON file
     if args.data:

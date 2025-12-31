@@ -1,21 +1,21 @@
 {
-  "url": "https://the-internet.herokuapp.com/login",
+  "url": "https://www.saucedemo.com/",
   "selectors": {
-    "username": "#username",
+    "username": "#user-name",
     "password": "#password",
-    "submit": "button[type='submit']"
+    "submit": "#login-button"
   },
   "test_cases": [
     {
       "name": "valid_test",
-      "username": "tomsmith",
-      "password": "SuperSecretPassword!",
+      "username": "standard_user",
+      "password": "secret_sauce",
       "expected": "success"
     },
     {
       "name": "invalid_test",
-      "username": "wrong",
-      "password": "wrong",
+      "username": "invalid_user",
+      "password": "wrong_password",
       "expected": "error"
     }
   ]

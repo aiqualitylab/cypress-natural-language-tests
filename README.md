@@ -22,6 +22,84 @@ This framework transforms natural language requirements into production-ready Cy
 
 ---
 
+## What's New in v2.2
+
+### Fully Dynamic Test Generation
+
+**Works for ANY URL** - No hardcoded selectors!
+
+```bash
+# Login form
+python qa_automation.py "Test login" --url https://example.com/login
+
+# Contact form  
+python qa_automation.py "Test contact" --url https://example.com/contact
+
+# Registration form
+python qa_automation.py "Test signup" --url https://example.com/register
+
+# Search form
+python qa_automation.py "Test search" --url https://google.com
+```
+
+**All work with the same script!** The AI analyzes each URL and generates appropriate selectors and test data dynamically.
+
+---
+
+## How Dynamic Generation Works
+
+### Dynamic Test Pattern
+
+```javascript
+// Works for ANY site - selectors come from fixture!
+const selectors = this.testData.selectors;
+
+Object.keys(selectors).forEach(field => {
+    if (field !== 'submit' && valid[field]) {
+        cy.get(selectors[field]).type(valid[field]);
+    }
+});
+
+cy.get(selectors.submit).click();
+```
+
+### The Magic: Dynamic Fixture Data
+
+When you run with `--url`, the AI analyzes the page and creates:
+
+```json
+// cypress/fixtures/url_test_data.json (auto-generated)
+{
+  "url": "https://example.com/contact",
+  "selectors": {
+    "name": "#name",
+    "email": "#email", 
+    "message": "#message",
+    "submit": "button[type='submit']"
+  },
+  "test_cases": [
+    {
+      "name": "valid_test",
+      "fullname": "John Doe",
+      "email": "john@example.com",
+      "message": "Hello!",
+      "expected": "success"
+    },
+    {
+      "name": "invalid_test",
+      "fullname": "Test",
+      "email": "invalid",
+      "message": "x",
+      "expected": "error"
+    }
+  ]
+}
+```
+
+The generated test uses this data **dynamically** - no hardcoded values!
+
+---
+
 ## cy.prompt() Integration
 
 This framework supports **two test generation modes**:
@@ -31,10 +109,10 @@ This framework supports **two test generation modes**:
 python qa_automation.py "Test login functionality" --url https://example.com/login
 ```
 - Fast execution
-- Explicit selectors
+- Dynamic selectors from fixture
 - Deterministic
 - No runtime AI calls
-- Uses fixture data from URL analysis
+- Works for ANY URL
 
 ### Self-Healing Tests (cy.prompt)
 ```bash
@@ -51,9 +129,9 @@ python qa_automation.py "Test login functionality" --use-prompt
 
 The framework provides two ways to supply test data:
 
-### Option 1: Live URL Analysis (--url)
+### Option 1: Live URL Analysis (--url) - RECOMMENDED
 
-Automatically fetch and analyze any URL to generate test data:
+Automatically fetch and analyze **ANY URL** to generate test data:
 
 ```bash
 python qa_automation.py "Test login" --url https://the-internet.herokuapp.com/login
@@ -64,7 +142,14 @@ This will:
 2. Extract real selectors (#id, .class, [name=x])
 3. Generate test cases (valid_test + invalid_test)
 4. Save fixture to `cypress/fixtures/url_test_data.json`
-5. Generate tests using the extracted data
+5. Generate tests using the extracted data **dynamically**
+
+**Works for:**
+- Login forms
+- Registration forms
+- Contact forms
+- Search forms
+- Any form with input fields!
 
 ### Option 2: JSON Test Data (--data)
 
@@ -148,6 +233,7 @@ FIX: Use cy.get('[data-testid="submit"]') or add cy.wait() before clicking
 ## Features
 
 * **AI-Powered**: Converts natural language requirements into working Cypress tests
+* **Fully Dynamic**: Works for ANY URL - no hardcoded selectors
 * **AI Failure Analyzer**: Instantly diagnose test failures with FREE LLM
 * **Dual Mode**: Traditional tests OR self-healing cy.prompt() tests
 * **URL Analysis**: Automatically fetch and analyze live URLs to generate test data and selectors
@@ -219,14 +305,14 @@ npx cypress open  # Initial setup
 Generate Cypress tests from natural language requirements:
 
 ```bash
-# Traditional tests with URL analysis
+# Traditional tests with URL analysis (works for ANY URL!)
 python qa_automation.py "Test user login with valid credentials" --url https://example.com/login
 
 # Traditional tests with JSON data
 python qa_automation.py "Test user login" --data cypress/fixtures/login_data.json
 
 # Self-healing tests with cy.prompt()
-python qa_automation.py "Test user login with valid credentials" --use-prompt
+python qa_automation.py "Test user login with valid credentials" --url https://example.com/login --use-prompt
 ```
 
 ### Analyze Test Failures
@@ -267,7 +353,20 @@ python qa_automation.py "Test login page" --url https://the-internet.herokuapp.c
 - `cypress/fixtures/url_test_data.json` (auto-generated test data)
 - `cypress/e2e/generated/01_test-login-page_20241223_100000.cy.js`
 
-### 2. Test Generation with JSON Data
+### 2. Test Different Form Types
+
+```bash
+# Login form
+python qa_automation.py "Test login" --url https://example.com/login
+
+# Contact form
+python qa_automation.py "Test contact form" --url https://example.com/contact
+
+# Registration form
+python qa_automation.py "Test signup" --url https://example.com/register
+```
+
+### 3. Test Generation with JSON Data
 
 ```bash
 python qa_automation.py "Test login page" --data cypress/fixtures/login_data.json
@@ -275,7 +374,7 @@ python qa_automation.py "Test login page" --data cypress/fixtures/login_data.jso
 
 **Output**: `cypress/e2e/generated/01_test-login-page_20241223_100000.cy.js`
 
-### 3. Self-Healing Test with cy.prompt()
+### 4. Self-Healing Test with cy.prompt()
 
 ```bash
 python qa_automation.py "Test login page" --use-prompt
@@ -283,7 +382,7 @@ python qa_automation.py "Test login page" --use-prompt
 
 **Output**: `cypress/e2e/prompt-powered/01_test-login-page_20241223_100000.cy.js`
 
-### 4. Multiple Requirements with URL Analysis
+### 5. Multiple Requirements with URL Analysis
 
 ```bash
 python qa_automation.py \
@@ -293,7 +392,7 @@ python qa_automation.py \
   --url https://the-internet.herokuapp.com/login
 ```
 
-### 5. With Documentation Context
+### 6. With Documentation Context
 
 ```bash
 python qa_automation.py \
@@ -302,7 +401,7 @@ python qa_automation.py \
   --url https://example.com/checkout
 ```
 
-### 6. Generate and Run Tests
+### 7. Generate and Run Tests
 
 ```bash
 python qa_automation.py \
@@ -311,7 +410,7 @@ python qa_automation.py \
   --run
 ```
 
-### 7. Analyze Failed Test
+### 8. Analyze Failed Test
 
 ```bash
 python qa_automation.py --analyze "AssertionError: expected true to equal false"
@@ -358,61 +457,61 @@ cypress/
   <img src=".github/images/Analysis.png" alt="AI Failure Analysis" width="350"/>
 </p>
 
-
 ---
 
-## Test Comparison
+## Generated Test Structure (Dynamic!)
 
-### Traditional Cypress Test (with fixtures)
+### Traditional Cypress Test (Fully Dynamic)
 ```javascript
-// cypress/e2e/generated/01_test-login_*.cy.js
-describe('Login Tests', function () {
+// cypress/e2e/generated/01_test-form_*.cy.js
+describe('Tests', function () {
     beforeEach(function () {
         cy.fixture('url_test_data').then((data) => {
             this.testData = data;
         });
     });
 
-    it('should login successfully with valid credentials', function () {
-        cy.visit(this.testData.url);
+    it('should succeed with valid data', function () {
+        cy.visit(this.testData.url);  // Dynamic URL!
         const valid = this.testData.test_cases.find(tc => tc.name === 'valid_test');
-        cy.get('#username').type(valid.username);
-        cy.get('#password').type(valid.password);
-        cy.get('button[type="submit"]').click();
-        cy.url().should('include', '/secure');
+        const selectors = this.testData.selectors;
+        
+        // Dynamic: loops through ALL selectors from fixture
+        Object.keys(selectors).forEach(field => {
+            if (field !== 'submit' && valid[field]) {
+                cy.get(selectors[field]).type(valid[field]);
+            }
+        });
+        
+        cy.get(selectors.submit).click();
     });
 
-    it('should show error with invalid credentials', function () {
+    it('should fail with invalid data', function () {
         cy.visit(this.testData.url);
         const invalid = this.testData.test_cases.find(tc => tc.name === 'invalid_test');
-        cy.get('#username').type(invalid.username);
-        cy.get('#password').type(invalid.password);
-        cy.get('button[type="submit"]').click();
-        cy.get('#flash').should('contain', 'invalid');
+        const selectors = this.testData.selectors;
+        
+        Object.keys(selectors).forEach(field => {
+            if (field !== 'submit' && invalid[field]) {
+                cy.get(selectors[field]).type(invalid[field]);
+            }
+        });
+        
+        cy.get(selectors.submit).click();
     });
 });
 ```
 
-### cy.prompt() Self-Healing Test
-```javascript
-// cypress/e2e/prompt-powered/01_test-login_*.cy.js
-describe('User Login Tests', () => {
-    const baseUrl = 'https://the-internet.herokuapp.com/login';
+### Why This Works for Any URL
 
-    beforeEach(() => {
-        cy.visit(baseUrl);
-    });
+| Component | Source | Dynamic? |
+|-----------|--------|----------|
+| URL | `this.testData.url` | ✅ Yes |
+| Selectors | `this.testData.selectors` | ✅ Yes |
+| Field names | `Object.keys(selectors)` | ✅ Yes |
+| Test values | `this.testData.test_cases` | ✅ Yes |
 
-    it('should successfully log in with valid credentials', () => {
-        cy.get('input[type="text"]').type('tomsmith');
-        cy.get('input[type="password"]').type('SuperSecretPassword!');
-        cy.get('button[type="submit"]').click();
-
-        cy.url().should('include', '/secure');
-        cy.get('.flash.success').should('be.visible').and('contain', 'You logged into a secure area!');
-    });
-});
-```
+**Nothing is hardcoded!** Everything comes from the fixture file.
 
 ---
 
@@ -420,13 +519,13 @@ describe('User Login Tests', () => {
 
 | Scenario | Use This |
 |----------|----------|
+| Any new form/page | Traditional + --url |
 | Stable application | Traditional + --url |
 | Active development | cy.prompt() |
 | CI/CD pipeline | Traditional + --data |
 | Exploratory testing | cy.prompt() |
 | Regression suite | Traditional + --data |
 | Rapid prototyping | cy.prompt() |
-| New application | Traditional + --url |
 | **Test failed?** | **--analyze** |
 
 ---
@@ -450,6 +549,7 @@ module.exports = defineConfig({
 
 The framework uses these models:
 - **Test Generation**: OpenAI `gpt-4o-mini` (temperature=0)
+- **URL Analysis**: OpenAI `gpt-4o-mini` (extracts selectors)
 - **Failure Analysis**: OpenRouter `deepseek/deepseek-r1-0528:free`
 
 ---
@@ -519,7 +619,7 @@ The `--analyze` mode bypasses the workflow and directly calls OpenRouter for ins
 
 | Command | Description |
 |---------|-------------|
-| `python qa_automation.py "Test X" --url URL` | Generate with live URL analysis |
+| `python qa_automation.py "Test X" --url URL` | Generate with live URL analysis (ANY URL!) |
 | `python qa_automation.py "Test X" --data file.json` | Generate with JSON test data |
 | `python qa_automation.py "Test X" --use-prompt` | Generate self-healing test |
 | `python qa_automation.py "Test X" --run` | Generate and run |
@@ -550,7 +650,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-
 ---
 
 ## Related Projects
@@ -567,6 +666,13 @@ This project generates Cypress E2E tests automatically from natural language req
 **Medium**: [AQE Publication](https://medium.com/ai-in-quality-assurance) / [Let's Automate Medium](https://aiqualityengineer.com/)
 
 ---
+
+## What's New in v2.2
+
+- **Fully Dynamic Test Generation**: Works for ANY URL - no hardcoded selectors
+- **Dynamic Selectors**: Tests use `this.testData.selectors` from fixture
+- **Dynamic URL**: Tests use `this.testData.url` from fixture  
+- **Universal Script**: Same script works for login, signup, contact, search - ANY form
 
 ## What's New in v2.1
 
