@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 AI-Powered Cypress Test Generator with LangGraph & Vector Store
-Beginner-friendly code: Simple, clear, easy to understand
 """
 
 import os
@@ -40,10 +39,7 @@ logger = logging.getLogger(__name__)
 PROMPT_DIR = Path(__file__).parent / "prompts"
 VECTOR_DB_DIR = Path(__file__).parent / "vector_db"
 
-
-# ============================================================================
 # VECTOR STORE - Stores and searches test patterns
-# ============================================================================
 
 class TestPatternStore:
     """Stores test patterns and finds similar ones"""
@@ -112,10 +108,7 @@ class TestPatternStore:
         
         return all_patterns
 
-
-# ============================================================================
 # STATE - Holds all workflow data
-# ============================================================================
 
 @dataclass
 class TestState:
@@ -140,10 +133,7 @@ class TestState:
     # Vector store
     vector_store: Optional[TestPatternStore] = None
 
-
-# ============================================================================
 # UTILITIES - Helper functions
-# ============================================================================
 
 def load_prompt_file(filename, **variables):
     """Load a prompt file and fill in variables"""
@@ -158,10 +148,7 @@ def load_prompt_file(filename, **variables):
     
     return filled_prompt
 
-
-# ============================================================================
 # WORKFLOW NODES - Steps in the workflow
-# ============================================================================
 
 def step_1_initialize_vector_store(state):
     """Step 1: Set up the vector store"""
@@ -333,10 +320,7 @@ def step_5_run_tests(state):
     
     return state
 
-
-# ============================================================================
 # WORKFLOW - Connects all steps
-# ============================================================================
 
 def should_run_tests(state):
     """Check if we should run tests"""
@@ -379,10 +363,7 @@ def create_workflow():
     
     return workflow.compile()
 
-
-# ============================================================================
 # ACTIONS - Things the tool can do
-# ============================================================================
 
 def analyze_test_failure(log_text):
     """Analyze why a test failed"""
@@ -459,11 +440,7 @@ def generate_tests_action(args):
     if final_state.get('test_results'):
         logger.info(f"\nTests passed: {final_state['test_results']['success']}")
 
-
-
-# ============================================================================
 # MAIN - Entry point
-# ============================================================================
 
 def main():
     logger.info("AI-Powered Cypress Test Generator")
@@ -492,11 +469,7 @@ def main():
     if analyze_mode:
         log_text = open(args.file).read() if args.file else args.analyze or sys.stdin.read()
         result = analyze_test_failure(log_text)
-        print("\n" + "="*60)
-        print("ANALYSIS RESULT")
-        print("="*60)
-        print(result)
-        print("="*60 + "\n")
+        logger.info(result)
         return
     
     if list_mode:
