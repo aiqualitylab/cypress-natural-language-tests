@@ -1,5 +1,7 @@
-langgraph
 langchain-openai
-langchain-community
+langgraph
+langchain-chroma
+langchain-core
 chromadb
 python-dotenv
+requests

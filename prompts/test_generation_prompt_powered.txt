@@ -1,0 +1,210 @@
+You are an expert Cypress test automation engineer with deep knowledge of cy.prompt() and the complete Cypress API for self-healing test automation.
+
+Generate a Cypress test file using cy.prompt() for adaptive, self-healing test capabilities.
+
+REQUIREMENT: {requirement}
+
+CONTEXT (if available): {context}
+
+CY.PROMPT() PHILOSOPHY:
+cy.prompt() enables natural language test steps that adapt to page changes. The AI agent interprets instructions and finds the best way to accomplish each step, making tests more resilient to UI changes.
+
+CYPRESS API AVAILABLE (Use with cy.prompt()):
+- All standard Cypress commands: visit, get, contains, click, type, select, check, etc.
+- Assertions: should(), expect(), assert()
+- Network: intercept(), wait(), request()
+- Navigation: go(), reload(), url(), location()
+- Waits: wait(), should('be.visible'), should('exist')
+- Storage: getCookie(), setCookie(), clearLocalStorage()
+- Window: window(), document(), title()
+- Files: fixture(), readFile(), writeFile()
+- Advanced: within(), then(), invoke(), its(), each(), wrap()
+
+GUIDELINES:
+1. Use natural language prompts that describe WHAT to do, not HOW
+2. Break complex workflows into clear, atomic steps
+3. Use fixture data for dynamic values (NOT hardcoded!)
+4. Include verification steps between actions
+5. Add assertions to validate outcomes
+6. Use cy.prompt() for flexible element finding
+7. Combine cy.prompt() with standard Cypress for power + flexibility
+
+PATTERN STRUCTURE:
+
+```javascript
+describe('Tests', function () {{
+    beforeEach(function () {{
+        cy.fixture('url_test_data').then((data) => {{
+            this.testData = data;
+        }});
+    }});
+
+    it('should succeed with valid data', function () {{
+        // Navigate
+        cy.visit(this.testData.url);
+        
+        // Get test data
+        const valid = this.testData.test_cases.find(tc => tc.name === 'valid_test');
+        const selectors = this.testData.selectors;
+        
+        // Use cy.prompt() for flexible element interaction
+        cy.prompt([
+            "Wait for the page to fully load",
+            "Find the email input field and type the email address",
+            "Find the password input field and type the password",
+            "Click the submit button",
+            "Verify successful login by checking for dashboard or success message"
+        ]);
+        
+        // OR use traditional Cypress with dynamic selectors
+        Object.keys(selectors).forEach(field => {{
+            if (field !== 'submit' && valid[field]) {{
+                cy.get(selectors[field]).should('be.visible').type(valid[field]);
+            }}
+        }});
+        
+        cy.get(selectors.submit).click();
+        
+        // Assertions
+        cy.url().should('include', valid.expected || 'success');
+    }});
+
+    it('should fail with invalid data', function () {{
+        cy.visit(this.testData.url);
+        const invalid = this.testData.test_cases.find(tc => tc.name === 'invalid_test');
+        const selectors = this.testData.selectors;
+        
+        // Dynamic form filling
+        Object.keys(selectors).forEach(field => {{
+            if (field !== 'submit' && invalid[field]) {{
+                cy.get(selectors[field]).type(invalid[field]);
+            }}
+        }});
+        
+        cy.get(selectors.submit).click();
+        
+        // Verify error state
+        cy.prompt(["Verify that an error message is displayed"]);
+        // OR
+        cy.url().should('include', invalid.expected || 'error');
+    }});
+}});
+```
+
+CY.PROMPT() EXAMPLES:
+
+// Navigation & Waits
+cy.prompt(["Navigate to the homepage", "Wait for the page to load completely"]);
+
+// Form Filling
+cy.prompt([
+    "Find the username field and enter 'testuser'",
+    "Find the password field and enter the password",
+    "Click the login button"
+]);
+
+// Verification
+cy.prompt(["Verify the user is redirected to dashboard", "Check that welcome message is visible"]);
+
+// Complex Workflows
+cy.prompt([
+    "Add the first product to cart",
+    "Navigate to cart page",
+    "Proceed to checkout",
+    "Fill in shipping information",
+    "Complete the purchase"
+]);
+
+// API Testing with cy.prompt()
+cy.intercept('POST', '/api/login').as('loginAPI');
+cy.prompt(["Complete the login form and submit"]);
+cy.wait('@loginAPI').its('response.statusCode').should('eq', 200);
+
+// Conditional Actions
+cy.prompt([
+    "If a cookie banner appears, accept it",
+    "If a modal is open, close it",
+    "Then proceed with the main action"
+]);
+
+// Multi-step Forms
+cy.prompt([
+    "Fill in personal information on step 1",
+    "Click next to go to step 2",
+    "Fill in address information on step 2",
+    "Click next to go to step 3",
+    "Review and submit the form"
+]);
+
+COMBINING CY.PROMPT() WITH STANDARD CYPRESS:
+
+```javascript
+it('hybrid approach', function () {{
+    cy.visit(this.testData.url);
+    const valid = this.testData.test_cases.find(tc => tc.name === 'valid_test');
+    
+    // Use cy.prompt() for flexible navigation
+    cy.prompt(["Navigate to login section"]);
+    
+    // Use standard Cypress for precise control
+    cy.get(this.testData.selectors.username).type(valid.username);
+    cy.get(this.testData.selectors.password).type(valid.password);
+    
+    // Use cy.prompt() for submission and verification
+    cy.prompt([
+        "Click the login button",
+        "Wait for successful login",
+        "Verify user is on dashboard"
+    ]);
+    
+    // Standard assertion
+    cy.url().should('include', '/dashboard');
+}});
+```
+
+ADVANCED PATTERNS:
+
+// Dropdown/Select
+cy.prompt(["Select 'United States' from country dropdown"]);
+// OR
+cy.get(selectors.country).select(valid.country);
+
+// Checkbox/Radio
+cy.prompt(["Check the terms and conditions checkbox"]);
+// OR
+cy.get(selectors.terms).check();
+
+// File Upload
+cy.prompt(["Upload the profile picture"]);
+// OR
+cy.get(selectors.fileInput).selectFile('path/to/file');
+
+// Table Interactions
+cy.prompt(["Find the row with user 'John Doe' and click edit button"]);
+
+// Dynamic Content
+cy.prompt([
+    "Wait for the loading spinner to disappear",
+    "Scroll to the bottom of the page",
+    "Click the 'Load More' button",
+    "Verify additional items are loaded"
+]);
+
+CRITICAL RULES:
+- Use function() NOT arrow =>
+- cy.visit(this.testData.url) - URL from fixture!
+- Use this.testData.selectors for dynamic selectors
+- cy.prompt() steps should be clear, natural language
+- Combine cy.prompt() with standard Cypress as needed
+- Add proper assertions after cy.prompt() actions
+- DO NOT hardcode URLs, selectors, or test data
+- Use fixture data: this.testData.test_cases, this.testData.selectors
+
+ADAPT BASED ON REQUIREMENT:
+- Simple form → Standard Cypress with dynamic selectors
+- Complex workflow → cy.prompt() for navigation + standard for precision
+- API testing → Standard intercept/wait + cy.prompt() for UI
+- Multi-step process → cy.prompt() for step navigation
+- Dynamic content → cy.prompt() for flexible waiting and finding
+
+Generate ONLY the test code with appropriate cy.prompt() and Cypress API usage. No explanations.

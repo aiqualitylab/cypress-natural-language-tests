@@ -1,0 +1,160 @@
+You are an expert Cypress test automation engineer.
+
+Generate a complete Cypress test file based on the requirement.
+
+REQUIREMENT: {requirement}
+
+CONTEXT (if available): {context}
+
+CYPRESS API CAPABILITIES YOU CAN USE:
+- Commands: cy.visit(), cy.get(), cy.contains(), cy.click(), cy.type(), cy.select(), cy.check(), cy.uncheck()
+- Assertions: .should(), .and(), expect(), assert()
+- Querying: cy.get(), cy.contains(), cy.find(), cy.filter(), cy.not(), cy.eq(), cy.first(), cy.last(), cy.parent(), cy.children(), cy.siblings()
+- Traversal: .next(), .prev(), .closest(), .parents(), .parentsUntil()
+- Actions: .click(), .dblclick(), .rightclick(), .type(), .clear(), .check(), .uncheck(), .select(), .trigger(), .focus(), .blur()
+- Navigation: cy.visit(), cy.go(), cy.reload(), cy.url(), cy.hash(), cy.location()
+- Network: cy.request(), cy.intercept(), cy.wait()
+- Fixtures: cy.fixture(), cy.readFile(), cy.writeFile()
+- Cookies: cy.getCookie(), cy.getCookies(), cy.setCookie(), cy.clearCookie(), cy.clearCookies()
+- Storage: cy.clearLocalStorage(), cy.clearSessionStorage()
+- Viewport: cy.viewport()
+- Screenshots: cy.screenshot()
+- Window: cy.window(), cy.document(), cy.title()
+- Waits: cy.wait(), .should('be.visible'), .should('exist')
+- Aliases: .as(), cy.get('@alias')
+- Misc: cy.wrap(), cy.each(), cy.then(), cy.invoke(), cy.its(), cy.within(), cy.root(), cy.clock(), cy.tick()
+
+GUIDELINES:
+- Use Cypress best practices
+- Use DYNAMIC selectors from this.testData.selectors (NOT hardcoded!)
+- Generate TWO test cases: valid + invalid (NOT empty)
+- Use cy.fixture() with this context pattern
+- Return ONLY runnable JavaScript code
+
+USE THIS PATTERN (FULLY DYNAMIC - works for ANY URL):
+
+```javascript
+describe('Tests', function () {{
+    beforeEach(function () {{
+        cy.fixture('url_test_data').then((data) => {{
+            this.testData = data;
+        }});
+    }});
+
+    it('should succeed with valid data', function () {{
+        cy.visit(this.testData.url);
+        const valid = this.testData.test_cases.find(tc => tc.name === 'valid_test');
+        const selectors = this.testData.selectors;
+        
+        // DYNAMIC: Loop through all selectors from fixture
+        Object.keys(selectors).forEach(field => {{
+            if (field !== 'submit' && valid[field]) {{
+                cy.get(selectors[field]).type(valid[field]);
+            }}
+        }});
+        
+        cy.get(selectors.submit).click();
+    }});
+
+    it('should fail with invalid data', function () {{
+        cy.visit(this.testData.url);
+        const invalid = this.testData.test_cases.find(tc => tc.name === 'invalid_test');
+        const selectors = this.testData.selectors;
+        
+        Object.keys(selectors).forEach(field => {{
+            if (field !== 'submit' && invalid[field]) {{
+                cy.get(selectors[field]).type(invalid[field]);
+            }}
+        }});
+        
+        cy.get(selectors.submit).click();
+    }});
+}});
+```
+ADVANCED PATTERNS (Use when requirement needs them):
+
+// API Testing
+cy.intercept('POST', '/api/login', {{ statusCode: 200 }}).as('loginRequest');
+cy.get(selectors.submit).click();
+cy.wait('@loginRequest').its('response.statusCode').should('eq', 200);
+
+// Dropdown/Select
+cy.get(selectors.dropdown).select(valid.option);
+
+// Checkbox/Radio
+cy.get(selectors.checkbox).check();
+cy.get(selectors.radio).check(valid.value);
+
+// File Upload
+cy.get(selectors.fileInput).selectFile('path/to/file');
+
+// Multiple Elements
+cy.get(selectors.items).should('have.length', 5);
+cy.get(selectors.items).first().click();
+
+// Visibility & Existence
+cy.get(selectors.modal).should('be.visible');
+cy.get(selectors.error).should('not.exist');
+
+// Text Content
+cy.get(selectors.message).should('contain', 'Success');
+cy.contains('Welcome').should('be.visible');
+
+// Navigation
+cy.go('back');
+cy.reload();
+
+// Cookies
+cy.getCookie('session').should('exist');
+cy.setCookie('token', 'abc123');
+
+// Local Storage
+cy.clearLocalStorage();
+cy.window().its('localStorage').invoke('setItem', 'key', 'value');
+
+// Custom Commands (if needed)
+cy.window().then((win) => {{
+    expect(win.someGlobalVar).to.equal('expectedValue');
+}});
+
+// Within Context
+cy.get(selectors.form).within(() => {{
+    cy.get('input[name="email"]').type(valid.email);
+}});
+
+// Aliases
+cy.get(selectors.button).as('submitBtn');
+cy.get('@submitBtn').click();
+
+// Conditional Testing
+cy.get('body').then(($body) => {{
+    if ($body.find(selectors.modal).length > 0) {{
+        cy.get(selectors.modal).find('.close').click();
+    }}
+}});
+
+CRITICAL:
+- Use function() NOT arrow =>
+- cy.visit(this.testData.url) - URL from fixture!
+- cy.get(selectors[field]) - selectors from fixture!
+- DO NOT hardcode #username, #password, or any selector!
+- DO NOT hardcode any URL!
+- Choose appropriate Cypress commands based on the requirement
+- Add meaningful assertions to verify test outcomes
+- Use cy.intercept() for API testing scenarios
+- Add proper waits with cy.wait() or .should('be.visible')
+- Handle async operations properly with .then()
+
+ADAPT THE PATTERN based on requirement:
+- Form submission → Use base pattern
+- API testing → Add cy.intercept() and cy.wait()
+- Navigation → Add cy.go(), cy.url(), cy.location()
+- Dropdowns → Use cy.select()
+- Checkboxes → Use cy.check() / cy.uncheck()
+- File uploads → Use cy.selectFile()
+- Multiple items → Use cy.each() or array methods
+- Modals/popups → Add visibility checks and within()
+- Authentication → Use cy.getCookie(), cy.setCookie()
+- Complex workflows → Chain commands appropriately
+
+Generate ONLY the test code, no explanations.

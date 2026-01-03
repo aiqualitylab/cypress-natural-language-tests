@@ -1,0 +1,117 @@
+You are an expert web automation engineer with deep understanding of HTML structure, CSS selectors, and test automation best practices.
+
+Analyze this HTML and generate comprehensive test data for automation.
+
+URL: {url}
+HTML:
+{html}
+
+ANALYSIS REQUIREMENTS:
+1. Identify ALL interactive elements (inputs, buttons, selects, checkboxes, radio buttons, textareas, links)
+2. Extract the BEST selectors in priority order:
+   - data-testid, data-test, data-cy attributes (highest priority)
+   - Unique IDs (#id)
+   - Name attributes ([name="..."])
+   - Unique classes (.class)
+   - ARIA labels and roles ([aria-label="..."], [role="..."])
+   - Placeholder attributes ([placeholder="..."])
+   - Type attributes ([type="..."])
+3. Identify form structure and submission elements
+4. Detect validation patterns (required fields, input types, patterns)
+5. Find success/error message containers
+6. Identify navigation elements
+7. Detect any modals, dropdowns, or dynamic elements
+
+Return ONLY valid JSON with this structure:
+
+{{
+  "url": "{url}",
+  "page_type": "login|signup|checkout|search|form|dashboard|multi-step",
+  "selectors": {{
+    "field_name": "#selector or .class or [attribute='value']",
+    "submit": "button selector",
+    "error_container": "error message selector",
+    "success_container": "success message selector"
+  }},
+  "element_types": {{
+    "field_name": "text|email|password|number|tel|url|checkbox|radio|select|textarea|file"
+  }},
+  "validations": {{
+    "field_name": {{"required": true, "type": "email", "pattern": "regex_if_any"}}
+  }},
+  "test_cases": [
+    {{
+      "name": "valid_test",
+      "description": "Test with valid data",
+      "field1": "valid_value",
+      "field2": "valid_value",
+      "expected": "success|redirect|url_change"
+    }},
+    {{
+      "name": "invalid_test",
+      "description": "Test with invalid data",
+      "field1": "invalid_value",
+      "field2": "invalid_value",
+      "expected": "error|validation_message"
+    }},
+    {{
+      "name": "empty_test",
+      "description": "Test with empty required fields",
+      "field1": "",
+      "field2": "",
+      "expected": "validation_error"
+    }}
+  ],
+  "additional_elements": {{
+    "links": ["selector1", "selector2"],
+    "modals": ["modal_selector"],
+    "dropdowns": ["dropdown_selector"]
+  }}
+}}
+
+SELECTOR BEST PRACTICES:
+- Prefer data attributes: [data-testid="login-button"]
+- Use IDs when unique: #submit-btn
+- Avoid fragile selectors like nth-child or complex paths
+- For inputs: input[name="email"], input[type="password"]
+- For buttons: button[type="submit"], .btn-primary
+- For links: a[href="/logout"]
+
+FIELD NAMING:
+- Use semantic names: username, email, password, firstName, lastName
+- Match the actual form field names
+- Use camelCase for consistency
+
+TEST DATA GENERATION:
+- valid_test: Use realistic valid data
+  - email: "test@example.com"
+  - password: "SecurePass123!"
+  - phone: "555-0123"
+  - name: "John Doe"
+- invalid_test: Use clearly invalid data
+  - email: "invalid-email"
+  - password: "123" (too short)
+  - phone: "abc"
+  - required fields: wrong format
+- empty_test: Empty strings for required fields
+
+CRITICAL RULES:
+- Return ONLY valid JSON (no markdown, no explanations)
+- All selectors must be valid CSS selectors
+- Include at least 2 test cases (valid + invalid)
+- Map field names to element_types
+- Include expected outcomes for each test case
+- If no forms found, analyze navigation/content elements
+- For multi-step forms, identify step indicators
+- For dropdowns/selects, note available options if visible
+
+EXAMPLES OF GOOD SELECTORS:
+- [data-testid="email-input"]
+- #login-form input[name="username"]
+- button[type="submit"]
+- input[placeholder="Enter email"]
+- select#country
+- .error-message
+- [role="alert"]
+
+Return ONLY the JSON object, nothing else.

@@ -1,36 +1,394 @@
 #!/usr/bin/env python3
 """
-Hybrid Cypress Test Generator with cy.prompt() Integration
-Combines LangGraph orchestration with Cypress's native AI capabilities
-AI Failure Analyzer (OpenRouter LLM)
+AI-Powered Cypress Test Generator with LangGraph & Vector Store
+Beginner-friendly code: Simple, clear, easy to understand
 """
 
 import os
 import re
 import sys
+import json
 import argparse
 import requests
+import logging
+import warnings
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
+from typing import List, Dict, Optional
+from dataclasses import dataclass, field
 
-# LangGraph and LangChain imports
+# Suppress warnings
+warnings.filterwarnings('ignore', category=UserWarning)
+warnings.filterwarnings('ignore', message='.*PyTorch.*')
+warnings.filterwarnings('ignore', message='.*TensorFlow.*')
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+
 from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_chroma import Chroma
 from langchain_core.documents import Document
-
-# Environment setup
 from dotenv import load_dotenv
+
 load_dotenv()
 
-# FAILURE ANALYZER 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-def analyze_failure(log: str) -> str:
-    """Send log to OpenRouter free LLM, get reason + fix."""
+PROMPT_DIR = Path(__file__).parent / "prompts"
+VECTOR_DB_DIR = Path(__file__).parent / "vector_db"
+
+
+# ============================================================================
+# VECTOR STORE - Stores and searches test patterns
+# ============================================================================
+
+class TestPatternStore:
+    """Stores test patterns and finds similar ones"""
+    
+    def __init__(self):
+        logger.info("Setting up vector store")
+        
+        # Create directory for database
+        VECTOR_DB_DIR.mkdir(parents=True, exist_ok=True)
+        
+        # Create vector database
+        self.embeddings = OpenAIEmbeddings()
+        self.vectorstore = Chroma(
+            persist_directory=str(VECTOR_DB_DIR),
+            embedding_function=self.embeddings
+        )
+        
+        logger.info("Vector store ready")
+    
+    def store_pattern(self, test_code, requirement, url, test_type, filepath):
+        """Store a test pattern in the database"""
+        logger.info(f"Storing pattern: {requirement}")
+        
+        # Create a document with the test code
+        doc = Document(
+            page_content=test_code,
+            metadata={
+                "requirement": requirement,
+                "url": url,
+                "test_type": test_type,
+                "filepath": filepath,
+                "timestamp": datetime.now().isoformat()
+            }
+        )
+        
+        # Add to database (auto-persists in new version)
+        self.vectorstore.add_documents([doc])
+        
+        logger.info("Pattern stored")
+    
+    def search_similar_patterns(self, requirement):
+        """Find patterns similar to the requirement"""
+        logger.info(f"Searching for patterns like: {requirement}")
+        
+        # Check how many patterns we have
+        count = self.vectorstore._collection.count()
+        
+        # Search for similar patterns
+        results = []
+        
+        if count > 0:
+            results = self.vectorstore.similarity_search(requirement, k=min(2, count))
+        
+        logger.info(f"Found {len(results)} similar patterns")
+        return results
+    
+    def get_all_patterns(self):
+        """Get all stored patterns"""
+        count = self.vectorstore._collection.count()
+        
+        all_patterns = []
+        
+        # Get patterns if any exist
+        if count > 0:
+            all_patterns = self.vectorstore.similarity_search("", k=count)
+        
+        return all_patterns
+
+
+# ============================================================================
+# STATE - Holds all workflow data
+# ============================================================================
+
+@dataclass
+class TestState:
+    """State that flows through the workflow"""
+    
+    # Input data
+    requirements: List[str]
+    output_dir: str
+    use_prompt: bool
+    url: Optional[str] = None
+    run_tests: bool = False
+    
+    # Processing data
+    test_data: Optional[Dict] = None
+    context: str = ""
+    similar_patterns: List = field(default_factory=list)
+    
+    # Output data
+    generated_tests: List = field(default_factory=list)
+    test_results: Optional[Dict] = None
+    
+    # Vector store
+    vector_store: Optional[TestPatternStore] = None
+
+
+# ============================================================================
+# UTILITIES - Helper functions
+# ============================================================================
+
+def load_prompt_file(filename, **variables):
+    """Load a prompt file and fill in variables"""
+    logger.info(f"Loading prompt: {filename}")
+    
+    # Read the prompt file with UTF-8 encoding
+    prompt_path = PROMPT_DIR / filename
+    prompt_text = prompt_path.read_text(encoding='utf-8')
+    
+    # Fill in variables
+    filled_prompt = prompt_text.format(**variables)
+    
+    return filled_prompt
+
+
+# ============================================================================
+# WORKFLOW NODES - Steps in the workflow
+# ============================================================================
+
+def step_1_initialize_vector_store(state):
+    """Step 1: Set up the vector store"""
+    logger.info("STEP 1: Initialize Vector Store")
+    
+    # Create vector store
+    state.vector_store = TestPatternStore()
+    
+    return state
+
+
+def step_2_fetch_test_data(state):
+    """Step 2: Get test data from URL"""
+    logger.info("STEP 2: Fetch Test Data")
+    
+    url = state.url
+    logger.info(f"Fetching URL: {url}")
+    
+    # Fetch HTML from URL
+    response = requests.get(url, timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
+    html = response.text[:5000]
+    
+    logger.info(f"Got {len(html)} characters of HTML")
+    
+    # Analyze HTML with AI
+    logger.info("Asking AI to analyze HTML")
+    
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    prompt = load_prompt_file("html_analysis.txt", url=url, html=html)
+    
+    ai_response = llm.invoke(prompt)
+    content = ai_response.content.strip()
+    
+    # Extract JSON from response
+    if "```" in content:
+        content = content.split("```")[1].replace("json", "").strip()
+    
+    test_data = json.loads(content)
+    
+    # Save test data to file
+    filepath = "cypress/fixtures/url_test_data.json"
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    
+    with open(filepath, 'w') as f:
+        json.dump(test_data, f, indent=2)
+    
+    logger.info(f"Saved test data to: {filepath}")
+    
+    # Update state
+    state.test_data = test_data
+    state.context = f"FIXTURE: {filepath}\nURL: {url}\nSELECTORS: {test_data['selectors']}"
+    
+    return state
+
+
+def step_3_search_similar_patterns(state):
+    """Step 3: Find similar patterns from past"""
+    logger.info("STEP 3: Search Similar Patterns")
+    
+    # Search for each requirement
+    all_patterns = []
+    
+    for requirement in state.requirements:
+        patterns = state.vector_store.search_similar_patterns(requirement)
+        all_patterns.extend(patterns)
+    
+    state.similar_patterns = all_patterns
+    
+    logger.info(f"Found {len(all_patterns)} similar patterns total")
+    
+    # Add patterns to context
+    has_patterns = len(all_patterns) > 0
+    
+    pattern_context = "\n\nSIMILAR PATTERNS FROM PAST:\n" + "\n".join([
+        f"\nPattern {i}:\n{p.page_content[:200]}..." 
+        for i, p in enumerate(all_patterns[:3], 1)
+    ]) if has_patterns else ""
+    
+    state.context = state.context + pattern_context
+    
+    return state
+
+
+def step_4_generate_tests(state):
+    """Step 4: Generate test files"""
+    logger.info("STEP 4: Generate Tests")
+    
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    generated_tests = []
+    
+    # Generate each test
+    for index, requirement in enumerate(state.requirements, 1):
+        logger.info(f"Generating test {index}/{len(state.requirements)}: {requirement}")
+        
+        # Choose prompt file
+        prompt_file = "test_generation_prompt_powered.txt" if state.use_prompt else "test_generation_traditional.txt"
+        
+        # Load prompt
+        prompt = load_prompt_file(prompt_file, requirement=requirement, context=state.context)
+        
+        # Ask AI to generate test
+        ai_response = llm.invoke(prompt)
+        content = ai_response.content
+        
+        # Extract JavaScript code
+        if "```javascript" in content:
+            content = content.split("```javascript")[1].split("```")[0].strip()
+        
+        # Prepare file paths
+        folder_name = "prompt-powered" if state.use_prompt else "generated"
+        folder = f"{state.output_dir}/{folder_name}"
+        os.makedirs(folder, exist_ok=True)
+        
+        # Create filename
+        slug = re.sub(r'[^\w\s-]', '', requirement.lower()).replace(' ', '-')[:50]
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{index:02d}_{slug}_{timestamp}.cy.js"
+        filepath = f"{folder}/{filename}"
+        
+        # Save test file
+        with open(filepath, 'w') as f:
+            f.write(f"// Requirement: {requirement}\n\n{content}")
+        
+        logger.info(f"Saved: {filename}")
+        
+        # Store pattern in vector database
+        state.vector_store.store_pattern(
+            test_code=content,
+            requirement=requirement,
+            url=state.url or "",
+            test_type="prompt_powered" if state.use_prompt else "traditional",
+            filepath=filepath
+        )
+        
+        # Add to generated tests list
+        test_info = {
+            "requirement": requirement,
+            "filepath": filepath,
+            "filename": filename
+        }
+        generated_tests.append(test_info)
+    
+    state.generated_tests = generated_tests
+    
+    return state
+
+
+def step_5_run_tests(state):
+    """Step 5: Run the generated tests"""
+    logger.info("STEP 5: Run Tests")
+    
+    # Build test path
+    folder_name = "prompt-powered" if state.use_prompt else "generated"
+    test_path = f"cypress/e2e/{folder_name}/**/*.cy.js"
+    
+    logger.info(f"Running tests: {test_path}")
+    
+    # Run Cypress
+    exit_code = os.system(f"npx cypress run --spec '{test_path}'")
+    
+    # Save results
+    state.test_results = {
+        "exit_code": exit_code,
+        "success": exit_code == 0,
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    logger.info(f"Tests finished with exit code: {exit_code}")
+    
+    return state
+
+
+# ============================================================================
+# WORKFLOW - Connects all steps
+# ============================================================================
+
+def should_run_tests(state):
+    """Check if we should run tests"""
+    return "run_tests" if state.run_tests else END
+
+
+def create_workflow():
+    """Create the LangGraph workflow"""
+    logger.info("Building workflow")
+    
+    # Create workflow
+    workflow = StateGraph(TestState)
+    
+    # Add steps
+    workflow.add_node("step_1", step_1_initialize_vector_store)
+    workflow.add_node("step_2", step_2_fetch_test_data)
+    workflow.add_node("step_3", step_3_search_similar_patterns)
+    workflow.add_node("step_4", step_4_generate_tests)
+    workflow.add_node("step_5", step_5_run_tests)
+    
+    # Connect steps
+    workflow.set_entry_point("step_1")
+    workflow.add_edge("step_1", "step_2")
+    workflow.add_edge("step_2", "step_3")
+    workflow.add_edge("step_3", "step_4")
+    
+    # Conditional: run tests or end
+    workflow.add_conditional_edges(
+        "step_4",
+        should_run_tests,
+        {
+            "run_tests": "step_5",
+            END: END
+        }
+    )
+    
+    workflow.add_edge("step_5", END)
+    
+    logger.info("Workflow ready")
+    
+    return workflow.compile()
+
+
+# ============================================================================
+# ACTIONS - Things the tool can do
+# ============================================================================
+
+def analyze_test_failure(log_text):
+    """Analyze why a test failed"""
+    logger.info("Analyzing test failure")
+    
+    # Ask AI to analyze
     response = requests.post(
         url="https://openrouter.ai/api/v1/chat/completions",
         headers={
@@ -39,617 +397,118 @@ def analyze_failure(log: str) -> str:
         },
         json={
             "model": "deepseek/deepseek-r1-0528:free",
-            "messages": [{"role": "user", "content": f"Analyze this Cypress test failure. Reply ONLY:\nREASON: (one line)\nFIX: (one line)\n\n{log}"}],
+            "messages": [{"role": "user", "content": f"Analyze this Cypress test failure. Reply ONLY:\nREASON: (one line)\nFIX: (one line)\n\n{log_text}"}],
             "max_tokens": 150
         }
     )
+    
+    logger.info("Analysis complete")
     return response.json()["choices"][0]["message"]["content"] if response.ok else f"Error: {response.text}"
 
 
-# URL-BASED TEST DATA GENERATOR (GENERIC FOR ANY URL!)
-
-def generate_test_data_from_url(url: str, requirements: list) -> tuple:
-    """
-    Fetch any URL, analyze HTML, generate test data.
-    Returns: (context_string, json_data, filepath)
-    """
-    import json as json_module
+def list_all_patterns():
+    """Show all stored patterns"""
+    logger.info("Listing all patterns")
     
-    # Fetch page
-    print(f"   Fetching {url}...")
-    try:
-        resp = requests.get(url, timeout=15, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
-        if not resp.ok:
-            return (f"HTTP {resp.status_code} - Could not fetch URL", None, None)
-        html = resp.text[:5000]
-        print(f"   Fetched {len(resp.text)} bytes")
-    except requests.exceptions.Timeout:
-        return ("Connection timed out - URL may be unreachable", None, None)
-    except requests.exceptions.ConnectionError:
-        return ("Connection failed - check URL and network", None, None)
-    except Exception as e:
-        return (f"Fetch error: {e}", None, None)
+    # Get patterns from database
+    store = TestPatternStore()
+    patterns = store.get_all_patterns()
     
-    # Check if HTML has form elements
-    if '<form' not in html.lower() and '<input' not in html.lower():
-        print(f"   Warning: No form elements detected in HTML")
+    logger.info(f"Total patterns: {len(patterns)}")
     
-    # Analyze with AI
-    print(f"   Analyzing with AI...")
-    try:
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    except Exception as e:
-        return (f"OpenAI API error: {e} - Check OPENAI_API_KEY", None, None)
-    
-    prompt = f"""Analyze this HTML and generate test data for automation.
-
-URL: {url}
-HTML:
-{html}
-
-Return ONLY valid JSON:
-{{"url": "{url}",
-  "selectors": {{"field1": "#selector1", "field2": "#selector2", "submit": "button selector"}},
-  "test_cases": [
-    {{"name": "valid_test", "field1": "valid_value", "field2": "valid_value", "expected": "success"}},
-    {{"name": "invalid_test", "field1": "wrong", "field2": "wrong", "expected": "error"}}
-  ]
-}}
-
-Rules:
-- Use REAL selectors from HTML (#id, .class, [name=x])
-- Use field names that match form inputs (username, password, email, etc.)
-- test_cases MUST have names: "valid_test" and "invalid_test"
-- NO empty values
-- Return ONLY JSON"""
-
-    try:
-        content = llm.invoke(prompt).content.strip()
-        if "```" in content:
-            content = content.split("```")[1].replace("json", "").split("```")[0].strip()
+    # Show each pattern
+    for i, pattern in enumerate(patterns, 1):
+        requirement = pattern.metadata.get('requirement', 'N/A')
+        test_type = pattern.metadata.get('test_type', 'N/A')
+        preview = pattern.page_content[:100]
         
-        test_data = json_module.loads(content)
-        
-        # Save fixture
-        os.makedirs("cypress/fixtures", exist_ok=True)
-        filepath = "cypress/fixtures/url_test_data.json"
-        with open(filepath, 'w') as f:
-            json_module.dump(test_data, f, indent=2)
-        print(f"   Saved: {filepath}")
-        
-        context = f"""
-FIXTURE: cypress/fixtures/url_test_data.json
-URL: {url}
-SELECTORS: {test_data.get('selectors', {})}
-TEST_CASES: {test_data.get('test_cases', [])}
-
-Use cy.fixture('url_test_data.json') with function() and this.testData"""
-        
-        return (context, test_data, filepath)
-        
-    except json_module.JSONDecodeError as e:
-        return (f"AI returned invalid JSON: {e}", None, None)
-    except Exception as e:
-        return (f"AI analysis error: {e}", None, None)
+        logger.info(f"Pattern {i}: {requirement}")
+        logger.info(f"  Type: {test_type}")
+        logger.info(f"  Preview: {preview}...")
 
 
-# TEST GENERATION
-
-@dataclass
-class TestGenerationState:
-    """State for test generation workflow"""
-    requirements: List[str]
-    output_dir: str
-    use_prompt: bool
-    docs_context: Optional[str]
-    generated_tests: List[Dict[str, Any]]
-    run_tests: bool
-    error: Optional[str]
-
-
-class HybridTestGenerator:
-    """Generates Cypress tests with cy.prompt() integration"""
-    
-    def __init__(self):
-        self.llm = ChatOpenAI(
-            model="gpt-4o-mini",
-            temperature=0
-        )
-        self.embeddings = OpenAIEmbeddings()
-        
-    def create_traditional_test_prompt(self) -> str:
-        """Prompt for generating traditional Cypress tests"""
-        return """You are an expert Cypress test automation engineer.
-
-Generate a complete Cypress test file based on the requirement.
-
-REQUIREMENT: {requirement}
-
-CONTEXT (if available): {context}
-
-GUIDELINES:
-- Use Cypress best practices
-- Use DYNAMIC selectors from this.testData.selectors (NOT hardcoded!)
-- Generate TWO test cases: valid + invalid (NOT empty)
-- Use cy.fixture() with this context pattern
-- Return ONLY runnable JavaScript code
-
-USE THIS PATTERN (FULLY DYNAMIC - works for ANY URL):
-
-```javascript
-describe('Tests', function () {{
-    beforeEach(function () {{
-        cy.fixture('url_test_data').then((data) => {{
-            this.testData = data;
-        }});
-    }});
-
-    it('should succeed with valid data', function () {{
-        cy.visit(this.testData.url);
-        const valid = this.testData.test_cases.find(tc => tc.name === 'valid_test');
-        const selectors = this.testData.selectors;
-        
-        // DYNAMIC: Loop through all selectors from fixture
-        Object.keys(selectors).forEach(field => {{
-            if (field !== 'submit' && valid[field]) {{
-                cy.get(selectors[field]).type(valid[field]);
-            }}
-        }});
-        
-        cy.get(selectors.submit).click();
-    }});
-
-    it('should fail with invalid data', function () {{
-        cy.visit(this.testData.url);
-        const invalid = this.testData.test_cases.find(tc => tc.name === 'invalid_test');
-        const selectors = this.testData.selectors;
-        
-        Object.keys(selectors).forEach(field => {{
-            if (field !== 'submit' && invalid[field]) {{
-                cy.get(selectors[field]).type(invalid[field]);
-            }}
-        }});
-        
-        cy.get(selectors.submit).click();
-    }});
-}});
-```
-
-CRITICAL:
-- Use function() NOT arrow =>
-- cy.visit(this.testData.url) - URL from fixture!
-- cy.get(selectors[field]) - selectors from fixture!
-- DO NOT hardcode #username, #password, or any selector!
-- DO NOT hardcode any URL!
-
-Generate ONLY the test code, no explanations."""
-
-    def create_prompt_powered_test_prompt(self) -> str:
-        """Prompt for generating cy.prompt() enabled tests"""
-        return """You are an expert Cypress test automation engineer with cy.prompt() expertise.
-
-Generate a Cypress test file using cy.prompt() for self-healing capabilities.
-
-REQUIREMENT: {requirement}
-
-CONTEXT (if available): {context}
-
-GUIDELINES FOR cy.prompt():
-- Use cy.prompt() with natural language step arrays
-- Each step should be clear and descriptive
-- Include verification steps
-- Use natural language like "Visit the page", "Click the submit button"
-- Group related steps logically
-- Use fixture data for URL and test data (NOT hardcoded!)
-
-DYNAMIC PATTERN (works for ANY URL):
-
-```javascript
-describe('Tests', function () {{
-    beforeEach(function () {{
-        cy.fixture('url_test_data').then((data) => {{
-            this.testData = data;
-        }});
-    }});
-
-    it('should succeed with valid data', function () {{
-        cy.visit(this.testData.url);
-        const valid = this.testData.test_cases.find(tc => tc.name === 'valid_test');
-        const selectors = this.testData.selectors;
-        
-        // Fill form fields dynamically
-        Object.keys(selectors).forEach(field => {{
-            if (field !== 'submit' && valid[field]) {{
-                cy.get(selectors[field]).type(valid[field]);
-            }}
-        }});
-        
-        cy.get(selectors.submit).click();
-    }});
-}});
-```
-
-CRITICAL:
-- Use this.testData.url for visiting (NOT hardcoded URL!)
-- Use this.testData.selectors for cy.get() (NOT hardcoded selectors!)
-- Use this.testData.test_cases for test values
-
-Generate ONLY the test code, no explanations."""
-
-    def generate_test_content(
-        self, 
-        requirement: str, 
-        context: str = "", 
-        use_prompt: bool = False
-    ) -> str:
-        """Generate test content using AI"""
-        
-        # Choose the right prompt template
-        if use_prompt:
-            template = self.create_prompt_powered_test_prompt()
-        else:
-            template = self.create_traditional_test_prompt()
-        
-        prompt = ChatPromptTemplate.from_template(template)
-        chain = prompt | self.llm
-        
-        response = chain.invoke({
-            "requirement": requirement,
-            "context": context or "No additional context provided"
-        })
-        
-        # Extract code from response
-        content = response.content
-        
-        # Remove markdown code blocks if present
-        if "```javascript" in content:
-            content = content.split("```javascript")[1].split("```")[0].strip()
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0].strip()
-            
-        return content
-
-    def slugify(self, text: str) -> str:
-        """Convert text to slug format"""
-        text = text.lower()
-        text = re.sub(r'[^\w\s-]', '', text)
-        text = re.sub(r'[-\s]+', '-', text)
-        return text[:50]  # Limit length
-
-    def save_test_file(
-        self, 
-        content: str, 
-        requirement: str, 
-        output_dir: str,
-        use_prompt: bool,
-        index: int
-    ) -> Dict[str, Any]:
-        """Save generated test to file"""
-        
-        # Simple: Choose folder based on test type
-        if use_prompt:
-            folder = f"{output_dir}/prompt-powered"
-        else:
-            folder = f"{output_dir}/generated"
-        
-        # Create folder if it doesn't exist
-        os.makedirs(folder, exist_ok=True)
-        
-        # Simple filename
-        slug = self.slugify(requirement)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{index:02d}_{slug}_{timestamp}.cy.js"
-        filepath = f"{folder}/{filename}"
-        
-        # Write file
-        with open(filepath, 'w') as f:
-            f.write(f"// Requirement: {requirement}\n")
-            f.write(f"// Test Type: {'cy.prompt()' if use_prompt else 'Traditional'}\n\n")
-            f.write(content)
-        
-        return {
-            "requirement": requirement,
-            "filepath": filepath,
-            "filename": filename
-        }
-
-
-class DocumentContextLoader:
-    """Load and process documentation for context"""
-    
-    def __init__(self, embeddings):
-        self.embeddings = embeddings
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200
-        )
-    
-    def load_documents(self, docs_dir: str) -> List[Document]:
-        """Load documents from directory"""
-        docs = []
-        docs_path = Path(docs_dir)
-        
-        if not docs_path.exists():
-            return docs
-            
-        for file_path in docs_path.rglob("*"):
-            if file_path.is_file() and file_path.suffix in ['.txt', '.md', '.json']:
-                try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                        docs.append(Document(
-                            page_content=content,
-                            metadata={"source": str(file_path)}
-                        ))
-                except Exception as e:
-                    print(f"Error loading {file_path}: {e}")
-                    
-        return docs
-    
-    def create_vector_store(self, docs: List[Document], persist_dir: str = "./vector_store"):
-        """Create vector store from documents"""
-        if not docs:
-            return None
-            
-        splits = self.text_splitter.split_documents(docs)
-        vector_store = Chroma.from_documents(
-            documents=splits,
-            embedding=self.embeddings,
-            persist_directory=persist_dir
-        )
-        return vector_store
-    
-    def get_relevant_context(self, vector_store, query: str, k: int = 3) -> str:
-        """Retrieve relevant context for a query"""
-        if not vector_store:
-            return ""
-            
-        results = vector_store.similarity_search(query, k=k)
-        context = "\n\n".join([doc.page_content for doc in results])
-        return context
-
-
-def parse_cli_node(state: TestGenerationState) -> TestGenerationState:
-    """Parse CLI arguments - initial node"""
-    test_type = "cy.prompt()" if state.use_prompt else "Traditional"
-    print(f"Generating {len(state.requirements)} test(s) - Type: {test_type}")
-    return state
-
-
-def load_context_node(state: TestGenerationState) -> TestGenerationState:
-    """Load documentation context if provided"""
-    # This is a placeholder - context loading happens in main
-    return state
-
-
-def generate_tests_node(state: TestGenerationState) -> TestGenerationState:
-    """Generate test files"""
-    generator = HybridTestGenerator()
-    generated = []
-    
-    for idx, requirement in enumerate(state.requirements, 1):
-        print(f"\nGenerating test {idx}/{len(state.requirements)}...")
-        
-        try:
-            # Generate test
-            content = generator.generate_test_content(
-                requirement=requirement,
-                context=state.docs_context or "",
-                use_prompt=state.use_prompt
-            )
-            
-            # Save test
-            result = generator.save_test_file(
-                content=content,
-                requirement=requirement,
-                output_dir=state.output_dir,
-                use_prompt=state.use_prompt,
-                index=idx
-            )
-            
-            generated.append(result)
-            print(f"Saved: {result['filename']}")
-            
-        except Exception as e:
-            print(f"Error: {e}")
-            state.error = str(e)
-    
-    state.generated_tests = generated
-    return state
-
-
-def run_cypress_node(state: TestGenerationState) -> TestGenerationState:
-    """Run Cypress tests if requested"""
-    if not state.run_tests or not state.generated_tests:
-        return state
-    
-    print("\nRunning tests...")
-    
-    # Choose which tests to run
-    if state.use_prompt:
-        tests = "cypress/e2e/prompt-powered/**/*.cy.js"
-    else:
-        tests = "cypress/e2e/generated/**/*.cy.js"
-    
-    # Run Cypress
-    cmd = f"npx cypress run --spec '{tests}'"
-    
-    try:
-        os.system(cmd)
-        print("Tests completed")
-    except Exception as e:
-        print(f"Error: {e}")
-        state.error = str(e)
-    
-    return state
-
-
-def create_workflow() -> StateGraph:
-    """Create LangGraph workflow"""
-    workflow = StateGraph(TestGenerationState)
-    
-    # Add nodes
-    workflow.add_node("parse_cli", parse_cli_node)
-    workflow.add_node("load_context", load_context_node)
-    workflow.add_node("generate_tests", generate_tests_node)
-    workflow.add_node("run_cypress", run_cypress_node)
-    
-    # Define edges
-    workflow.set_entry_point("parse_cli")
-    workflow.add_edge("parse_cli", "load_context")
-    workflow.add_edge("load_context", "generate_tests")
-    workflow.add_edge("generate_tests", "run_cypress")
-    workflow.add_edge("run_cypress", END)
-    
-    return workflow.compile()
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="Cypress Test Generator & Failure Analyzer",
-        epilog="""
-EXAMPLES:
-  Traditional:      python qa_automation.py "Test login" --url https://example.com/login
-  From JSON:        python qa_automation.py "Test login" --data testdata.json
-  Analyze failure:  python qa_automation.py --analyze "CypressError: Element not found"
-        """
-    )
-    
-    # Analyze mode
-    parser.add_argument('--analyze', '-a', nargs='?', const='', help='Analyze failure')
-    parser.add_argument('--file', '-f', help='Log file to analyze')
-    
-    # Generate mode
-    parser.add_argument('requirements', nargs='*', help='What to test')
-    parser.add_argument('--out', default='cypress/e2e', help='Output folder')
-    parser.add_argument('--use-prompt', action='store_true', help='Enable self-healing tests')
-    parser.add_argument('--run', action='store_true', help='Run tests after generation')
-    parser.add_argument('--docs', help='Documentation folder for context')
-    
-    # Test data options
-    parser.add_argument('--url', '-u', help='Live URL to fetch and generate test data')
-    parser.add_argument('--data', '-d', help='JSON file with test data')
-    
-    args = parser.parse_args()
-    
-    # === ANALYZE MODE ===
-    if args.analyze is not None or args.file:
-        if args.file:
-            with open(args.file) as f:
-                log = f.read()
-        elif args.analyze:
-            log = args.analyze
-        elif not sys.stdin.isatty():
-            log = sys.stdin.read()
-        else:
-            print("Usage: --analyze 'error' or -f log.txt")
-            sys.exit(1)
-        print("\nAnalyzing...\n")
-        print(analyze_failure(log))
-        return
-    
-    # === GENERATE MODE ===
-    if not args.requirements:
-        parser.print_help()
-        return
-    
-    test_data_context = ""
-    saved_test_data_file = None
-    
-    # Option 1: Fetch REAL live URL
-    if args.url:
-        print(f"Fetching live URL: {args.url}")
-        context, test_data, filepath = generate_test_data_from_url(args.url, args.requirements)
-        
-        if filepath:
-            test_data_context += context
-            saved_test_data_file = filepath
-            print(f"   Test data generated successfully")
-        else:
-            print(f"   ERROR: {context}")
-            print(f"   Failed to generate test data from URL")
-            print(f"   Try: --data option with existing JSON file instead")
-            sys.exit(1)
-    
-    # Option 2: Load from JSON file
-    if args.data:
-        try:
-            import json as json_module
-            with open(args.data, 'r') as f:
-                test_data = json_module.load(f)
-            test_data_context += f"\n\nTEST DATA FROM FILE:\n```json\n{json_module.dumps(test_data, indent=2)}\n```"
-            print(f"Loaded test data from: {args.data}")
-            saved_test_data_file = args.data
-        except Exception as e:
-            print(f"Could not load test data: {e}")
-    
-    # Load documentation context if provided
-    docs_context = None
-    if args.docs:
-        print(f"Loading documentation from: {args.docs}")
-        loader = DocumentContextLoader(OpenAIEmbeddings())
-        docs = loader.load_documents(args.docs)
-        if docs:
-            vector_store = loader.create_vector_store(docs)
-            combined_query = " ".join(args.requirements)
-            docs_context = loader.get_relevant_context(vector_store, combined_query)
-            print(f"Loaded context from {len(docs)} document(s)")
-    
-    # Combine contexts
-    full_context = (docs_context or "") + test_data_context
+def generate_tests_action(args):
+    """Generate tests using workflow"""
+    logger.info("Starting test generation")
     
     # Create initial state
-    initial_state = TestGenerationState(
+    state = TestState(
         requirements=args.requirements,
         output_dir=args.out,
         use_prompt=args.use_prompt,
-        docs_context=full_context if full_context else None,
-        generated_tests=[],
-        run_tests=args.run,
-        error=None
+        url=args.url,
+        run_tests=args.run
     )
     
     # Run workflow
-    print("\n" + "="*50)
-    print("Starting Test Generation")
-    print("="*50)
-    
     workflow = create_workflow()
-    result = workflow.invoke(initial_state)
+    final_state = workflow.invoke(state)
     
-    # Print summary
-    print("\n" + "="*50)
-    print("DONE!")
-    print("="*50)
+    # Show results
+    logger.info("="*50)
+    logger.info("GENERATION COMPLETE")
+    logger.info("="*50)
+    logger.info(f"Generated tests: {len(final_state['generated_tests'])}")
+    logger.info(f"Output location: {args.out}")
+    logger.info(f"Similar patterns used: {len(final_state['similar_patterns'])}")
     
-    test_count = len(result['generated_tests'])
-    if args.use_prompt:
-        test_type = "cy.prompt()"
-    else:
-        test_type = "Traditional"
+    logger.info("\nGenerated files:")
+    for test in final_state['generated_tests']:
+        logger.info(f"  - {test['filename']}")
     
-    print(f"Generated: {test_count} test(s)")
-    print(f"Type: {test_type}")
-    print(f"Location: {args.out}")
+    if final_state.get('test_results'):
+        logger.info(f"\nTests passed: {final_state['test_results']['success']}")
+
+
+
+# ============================================================================
+# MAIN - Entry point
+# ============================================================================
+
+def main():
+    logger.info("AI-Powered Cypress Test Generator")
+    logger.info("With LangGraph Workflows and Vector Store Learning")
     
-    if saved_test_data_file:
-        print(f"\nTest Data: {saved_test_data_file}")
+    # Setup command line arguments
+    parser = argparse.ArgumentParser(description="AI Cypress Test Generator")
     
-    if result['generated_tests']:
-        print("\nFiles:")
-        for test in result['generated_tests']:
-            print(f"  - {test['filename']}")
+    parser.add_argument('--analyze', '-a', nargs='?', const='', help='Analyze test failure')
+    parser.add_argument('--file', '-f', help='Log file to analyze')
+    parser.add_argument('requirements', nargs='*', help='Test requirements')
+    parser.add_argument('--out', default='cypress/e2e', help='Output directory')
+    parser.add_argument('--use-prompt', action='store_true', help='Use cy.prompt()')
+    parser.add_argument('--run', action='store_true', help='Run tests after generation')
+    parser.add_argument('--url', '-u', help='URL to analyze')
+    parser.add_argument('--list-patterns', action='store_true', help='List stored patterns')
     
-    if result['error']:
-        print(f"\nError: {result['error']}")
+    args = parser.parse_args()
     
-    print("\nNext step:")
-    if args.use_prompt:
-        print("  npm run cypress:run:prompt")
-    else:
-        print("  npm run cypress:run:traditional")
+    # Determine what to do
+    analyze_mode = args.analyze is not None or args.file
+    list_mode = args.list_patterns
+    generate_mode = len(args.requirements) > 0
+    
+    # Do the action
+    if analyze_mode:
+        log_text = open(args.file).read() if args.file else args.analyze or sys.stdin.read()
+        result = analyze_test_failure(log_text)
+        print("\n" + "="*60)
+        print("ANALYSIS RESULT")
+        print("="*60)
+        print(result)
+        print("="*60 + "\n")
+        return
+    
+    if list_mode:
+        list_all_patterns()
+        return
+    
+    if generate_mode:
+        generate_tests_action(args)
+        return
+    
+    # Show help
+    parser.print_help()
 
 
 if __name__ == "__main__":

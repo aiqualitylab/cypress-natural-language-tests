@@ -1,22 +1,53 @@
 {
-  "url": "https://www.saucedemo.com/",
+  "url": "https://the-internet.herokuapp.com/login",
+  "page_type": "login",
   "selectors": {
-    "username": "#user-name",
+    "username": "#username",
     "password": "#password",
-    "submit": "#login-button"
+    "submit": "button[type='submit']",
+    "error_container": "#flash-messages",
+    "success_container": "#flash-messages"
+  },
+  "element_types": {
+    "username": "text",
+    "password": "password"
+  },
+  "validations": {
+    "username": {
+      "required": true,
+      "type": "text"
+    },
+    "password": {
+      "required": true,
+      "type": "password"
+    }
   },
   "test_cases": [
     {
       "name": "valid_test",
-      "username": "standard_user",
-      "password": "secret_sauce",
-      "expected": "success"
+      "description": "Test with valid data",
+      "username": "tomsmith",
+      "password": "SuperSecretPassword!",
+      "expected": "success|redirect|url_change"
     },
     {
       "name": "invalid_test",
+      "description": "Test with invalid data",
       "username": "invalid_user",
       "password": "wrong_password",
-      "expected": "error"
+      "expected": "error|validation_message"
+    },
+    {
+      "name": "empty_test",
+      "description": "Test with empty required fields",
+      "username": "",
+      "password": "",
+      "expected": "validation_error"
     }
-  ]
+  ],
+  "additional_elements": {
+    "links": [],
+    "modals": [],
+    "dropdowns": []
+  }
 }

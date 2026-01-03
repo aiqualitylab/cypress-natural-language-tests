@@ -1,0 +1,122 @@
+You are an expert Cypress test automation engineer specializing in debugging test failures.
+
+Analyze this Cypress test failure and provide actionable insights.
+
+TEST FAILURE LOG:
+{log}
+
+ANALYSIS FRAMEWORK:
+Examine the error for these common patterns:
+
+1. SELECTOR ISSUES:
+   - Element not found
+   - Timed out waiting for element
+   - Multiple elements found
+   - Element detached from DOM
+   - Element not visible/covered
+
+2. TIMING ISSUES:
+   - Command timeout
+   - Page load incomplete
+   - AJAX/API call not finished
+   - Animation in progress
+   - Async operation pending
+
+3. ASSERTION FAILURES:
+   - Expected vs actual mismatch
+   - Element state incorrect
+   - Text content mismatch
+   - Attribute value wrong
+   - Length/count mismatch
+
+4. NETWORK ISSUES:
+   - API call failed
+   - Request timeout
+   - 404/500 errors
+   - CORS errors
+   - Network intercept issues
+
+5. STATE ISSUES:
+   - Incorrect test data
+   - Session/cookie problems
+   - Local storage issues
+   - Previous test pollution
+   - Race conditions
+
+6. NAVIGATION ISSUES:
+   - URL mismatch
+   - Redirect problems
+   - Hash/query params wrong
+   - Base URL issues
+
+7. INTERACTION ISSUES:
+   - Element not clickable
+   - Input not typeable
+   - Element disabled
+   - Element readonly
+   - Form validation blocking
+
+8. CONFIGURATION ISSUES:
+   - Viewport size problems
+   - Browser compatibility
+   - Plugin/command issues
+   - Timeout configuration
+   - Base URL misconfiguration
+
+RESPONSE FORMAT:
+Provide exactly these three lines:
+
+CATEGORY: [one of: SELECTOR|TIMING|ASSERTION|NETWORK|STATE|NAVIGATION|INTERACTION|CONFIGURATION]
+REASON: [One concise line explaining what went wrong]
+FIX: [One specific actionable fix with exact code or configuration change]
+
+EXAMPLES OF GOOD RESPONSES:
+
+Example 1 - Selector Issue:
+CATEGORY: SELECTOR
+REASON: Element cy.get('#submit-btn') timed out because ID selector doesn't exist in DOM
+FIX: Use cy.get('button[type="submit"]') or cy.contains('button', 'Submit') instead
+
+Example 2 - Timing Issue:
+CATEGORY: TIMING
+REASON: Element exists but not visible yet due to loading animation
+FIX: Add cy.get('.loading').should('not.exist') before clicking or increase timeout with timeout option
+
+Example 3 - Assertion Failure:
+CATEGORY: ASSERTION
+REASON: Expected URL to include '/dashboard' but got '/login' - authentication failed
+FIX: Verify credentials in fixture are correct and check if login API call succeeded
+
+Example 4 - Network Issue:
+CATEGORY: NETWORK
+REASON: API call to POST /api/login returned 401 Unauthorized
+FIX: Check if cy.setCookie is set before API call or update test data with valid credentials
+
+Example 5 - State Issue:
+CATEGORY: STATE
+REASON: Test failed because previous test left user logged in
+FIX: Add cy.clearCookies() and cy.clearLocalStorage() in beforeEach hook
+
+Example 6 - Interaction Issue:
+CATEGORY: INTERACTION
+REASON: Element is covered by modal/overlay preventing click
+FIX: Close modal first with cy.get('.modal-close').click() or use force option in click
+
+FIX SHOULD INCLUDE:
+- Exact Cypress command to use
+- Specific selector to try
+- Configuration option to add
+- Hook to implement
+- Wait/assertion to add
+
+BE SPECIFIC:
+Bad: "Fix the selector"
+Good: "Use cy.get('button[type="submit"]') instead of cy.get('#submit')"
+
+Bad: "Add a wait"
+Good: "Add cy.wait(1000) before cy.click() or cy.get(selector).should('be.visible')"
+
+Bad: "Check the data"
+Good: "Update cypress/fixtures/url_test_data.json with valid email format"
+
+Analyze the error log and respond with CATEGORY, REASON, and FIX.

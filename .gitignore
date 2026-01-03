@@ -4,31 +4,47 @@ __pycache__/
 *$py.class
 *.so
 .Python
-venv/
 env/
+venv/
 ENV/
-.venv
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Vector Store
-vector_store/
-*.db
+# Environment variables
+.env
+.env.local
+
+# Vector Store Database - DO NOT COMMIT
+vector_db/
 *.sqlite3
+*.db
+
+# Cypress
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/
+cypress/e2e/generated/
+cypress/e2e/prompt-powered/
+cypress/fixtures/url_test_data.json
 
 # Node
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Cypress
-cypress/videos/
-cypress/screenshots/
-cypress/downloads/
-
-# Environment Variables
-.env
-.env.local
-.env.*.local
 
 # IDE
 .vscode/
@@ -45,6 +61,7 @@ Thumbs.db
 *.log
 logs/
 
-# IMPORTANT: Do NOT ignore .github folder
-# We want to commit Copilot instructions and skills
-# !.github/
+# Test results
+test-results/
+coverage/
+.nyc_output/
