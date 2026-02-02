@@ -5,6 +5,7 @@ __pycache__
 
 # Secrets (injected at runtime via env_file)
 .env
+.env.example
 
 # Git history (not needed in image)
 .git
