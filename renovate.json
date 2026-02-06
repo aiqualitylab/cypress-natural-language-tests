@@ -1,17 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:base"
-  ],
+  "extends": ["config:base"],
   "timezone": "Europe",
   "schedule": ["before 9am on Monday"],
   "labels": ["dependencies"],
-  "pip_requirements": {
-    "fileMatch": ["(^|/)requirements\\.txt$"]
-  },
-  "npm": {
-    "fileMatch": ["(^|/)package\\.json$"]
-  },
   "packageRules": [
     {
       "matchPackageNames": ["cypress"],
