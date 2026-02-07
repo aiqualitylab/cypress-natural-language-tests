@@ -4,7 +4,7 @@ langchain-chroma==0.2.6
 langchain-core==0.3.83
 chromadb==1.4.0
 python-dotenv==1.0.0
-requests==2.31.0
+requests==2.32.5
 langchain-anthropic==0.3.22
 langchain-google-genai==2.1.12
 protobuf==5.29.3
