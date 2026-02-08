@@ -10,10 +10,9 @@ import json
 import argparse
 import requests
 import logging
-import warnings
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field
 
 from langgraph.graph import StateGraph, END
@@ -63,7 +62,7 @@ LLM_CONFIG = {
 
 DEFAULT_LLM = "openai"
 
-def get_llm(provider: str = DEFAULT_LLM):
+def get_llm(provider: str = DEFAULT_LLM) -> Any:
     """Get LLM instance for the specified provider"""
     if provider not in LLM_CONFIG:
         logger.warning(f"Unknown provider '{provider}', using default {DEFAULT_LLM}")
@@ -116,7 +115,7 @@ FRAMEWORK_CONFIG = {
 class TestPatternStore:
     """Stores test patterns and finds similar ones"""
     
-    def __init__(self):
+    def __init__(self) -> None:
         logger.info("Setting up vector store")
         
         # Create directory for database
@@ -131,7 +130,7 @@ class TestPatternStore:
         
         logger.info("Vector store ready")
     
-    def store_pattern(self, test_code, requirement, url, test_type, filepath):
+    def store_pattern(self, test_code: str, requirement: str, url: str, test_type: str, filepath: str) -> None:
         """Store a test pattern in the database"""
         logger.info(f"Storing pattern: {requirement}")
         
@@ -152,7 +151,7 @@ class TestPatternStore:
         
         logger.info("Pattern stored")
     
-    def search_similar_patterns(self, requirement):
+    def search_similar_patterns(self, requirement: str) -> List[Document]:
         """Find patterns similar to the requirement"""
         logger.info(f"Searching for patterns like: {requirement}")
         
@@ -168,7 +167,7 @@ class TestPatternStore:
         logger.info(f"Found {len(results)} similar patterns")
         return results
     
-    def get_all_patterns(self):
+    def get_all_patterns(self) -> List[Document]:
         """Get all stored patterns"""
         count = self.vectorstore._collection.count()
         
@@ -209,7 +208,7 @@ class TestState:
 
 # UTILITIES - Helper functions
 
-def load_prompt_file(filename, **variables):
+def load_prompt_file(filename: str, **variables: Any) -> str:
     """Load a prompt file and fill in variables"""
     logger.info(f"Loading prompt: {filename}")
     
@@ -224,7 +223,7 @@ def load_prompt_file(filename, **variables):
 
 # WORKFLOW NODES - Steps in the workflow
 
-def step_1_initialize_vector_store(state):
+def step_1_initialize_vector_store(state: TestState) -> TestState:
     """Step 1: Set up the vector store"""
     logger.info("STEP 1: Initialize Vector Store")
     
@@ -234,7 +233,7 @@ def step_1_initialize_vector_store(state):
     return state
 
 
-def step_2_fetch_test_data(state):
+def step_2_fetch_test_data(state: TestState) -> TestState:
     """Step 2: Get test data from URL"""
     logger.info("STEP 2: Fetch Test Data")
     
@@ -285,7 +284,7 @@ def step_2_fetch_test_data(state):
     return state
 
 
-def step_3_search_similar_patterns(state):
+def step_3_search_similar_patterns(state: TestState) -> TestState:
     """Step 3: Find similar patterns from past"""
     logger.info("STEP 3: Search Similar Patterns")
     
@@ -313,7 +312,7 @@ def step_3_search_similar_patterns(state):
     return state
 
 
-def step_4_generate_tests(state):
+def step_4_generate_tests(state: TestState) -> TestState:
     """Step 4: Generate test files"""
     logger.info("STEP 4: Generate Tests")
     logger.info(f"Using LLM provider: {LLM_CONFIG[state.llm_provider]['name']}")
@@ -404,7 +403,7 @@ def step_4_generate_tests(state):
     return state
 
 
-def step_5_run_tests(state):
+def step_5_run_tests(state: TestState) -> TestState:
     """Step 5: Run the generated tests"""
     logger.info("STEP 5: Run Tests")
     
@@ -437,12 +436,12 @@ def step_5_run_tests(state):
 
 # WORKFLOW - Connects all steps
 
-def should_run_tests(state):
+def should_run_tests(state: TestState) -> str:
     """Check if we should run tests"""
     return "run_tests" if state.run_tests else END
 
 
-def create_workflow():
+def create_workflow() -> Any:
     """Create the LangGraph workflow"""
     logger.info("Building workflow")
     
@@ -480,7 +479,7 @@ def create_workflow():
 
 # ACTIONS - Things the tool can do
 
-def analyze_test_failure(log_text):
+def analyze_test_failure(log_text: str) -> str:
     """Analyze why a test failed"""
     logger.info("Analyzing test failure")
     
@@ -510,7 +509,7 @@ def analyze_test_failure(log_text):
     return response.json()["choices"][0]["message"]["content"] if response.ok else f"Error: {response.text}"
 
 
-def list_all_patterns():
+def list_all_patterns() -> None:
     """Show all stored patterns"""
     logger.info("Listing all patterns")
     
@@ -531,7 +530,7 @@ def list_all_patterns():
         logger.info(f"  Preview: {preview}...")
 
 
-def generate_tests_action(args):
+def generate_tests_action(args: argparse.Namespace) -> None:
     """Generate tests using workflow"""
     logger.info("Starting test generation")
     logger.info(f"Framework: {args.framework.upper()}")
@@ -570,7 +569,7 @@ def generate_tests_action(args):
 
 # MAIN - Entry point
 
-def main():
+def main() -> None:
     logger.info("AI-Powered Test Generator (Cypress & Playwright)")
     logger.info("With LangGraph Workflows and Vector Store Learning")
     
