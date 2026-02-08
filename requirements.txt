@@ -1,7 +1,7 @@
 langchain-openai==1.1.7
 langgraph==1.0.8
 langchain-chroma==1.1.0
-langchain-core==0.3.83
+langchain-core==1.2.9
 chromadb==1.4.1
 python-dotenv==1.2.1
 requests==2.32.5
