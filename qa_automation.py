@@ -575,20 +575,57 @@ def main():
     logger.info("With LangGraph Workflows and Vector Store Learning")
     
     # Setup command line arguments
-    parser = argparse.ArgumentParser(description="AI Test Generator — Cypress & Playwright")
+    parser = argparse.ArgumentParser(
+        description="AI Test Generator — Cypress & Playwright",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Generate Cypress test
+  python qa_automation.py "Test login" --url https://example.com/login
+
+  # Generate Playwright test
+  python qa_automation.py "Test login" --url https://example.com/login --framework playwright
+
+  # Use cy.prompt() mode (Cypress only)
+  python qa_automation.py "Test login" --url https://example.com/login --use-prompt
+
+  # Generate and run tests
+  python qa_automation.py "Test login" --url https://example.com/login --run
+
+  # Use different LLM provider
+  python qa_automation.py "Test login" --url https://example.com/login --llm anthropic
+
+  # Analyze test failure
+  python qa_automation.py --analyze "CypressError: Element not found"
+
+  # Analyze test failure from file
+  python qa_automation.py --analyze -f error.log
+
+  # List stored patterns
+  python qa_automation.py --list-patterns
+"""
+    )
     
-    parser.add_argument('--analyze', '-a', nargs='?', const='', help='Analyze test failure')
-    parser.add_argument('--file', '-f', help='Log file to analyze')
-    parser.add_argument('requirements', nargs='*', help='Test requirements')
-    parser.add_argument('--out', default='cypress/e2e', help='Output directory')
-    parser.add_argument('--use-prompt', action='store_true', help='Use cy.prompt() style (Cypress only)')
-    parser.add_argument('--run', action='store_true', help='Run tests after generation')
-    parser.add_argument('--url', '-u', help='URL to analyze')
-    parser.add_argument('--list-patterns', action='store_true', help='List stored patterns')
-    parser.add_argument('--framework', choices=['cypress', 'playwright'], default='cypress',
+    parser.add_argument('requirements', nargs='*', 
+                        help='One or more test requirements in natural language (e.g., "Test login with valid credentials")')
+    parser.add_argument('--framework', '-fw', choices=['cypress', 'playwright'], default='cypress',
                         help='Target framework: cypress (default) or playwright')
+    parser.add_argument('--url', '-u', 
+                        help='URL to analyze - fetches page HTML, extracts selectors, and generates test data fixture')
+    parser.add_argument('--out', default='cypress/e2e', 
+                        help='Output directory for generated tests (default: framework-specific)')
+    parser.add_argument('--use-prompt', action='store_true', 
+                        help='Generate self-healing tests using cy.prompt() - Cypress only, requires Cypress 15.8.1+ with experimentalCypressPrompt enabled')
+    parser.add_argument('--run', action='store_true', 
+                        help='Execute tests immediately after generation using framework test runner')
     parser.add_argument('--llm', choices=list(LLM_CONFIG.keys()), default=DEFAULT_LLM,
-                        help=f'LLM provider: {" or ".join(LLM_CONFIG.keys())} (default: {DEFAULT_LLM})')
+                        help=f'LLM provider to use for test generation: {", ".join(LLM_CONFIG.keys())} (default: {DEFAULT_LLM})')
+    parser.add_argument('--analyze', '-a', nargs='?', const='', 
+                        help='Analyze test failure log using AI - provide error message directly or use with --file')
+    parser.add_argument('--file', '-f', 
+                        help='Path to log file containing test failure output to analyze')
+    parser.add_argument('--list-patterns', action='store_true', 
+                        help='Display all test patterns stored in the vector database')
     
     args = parser.parse_args()
     
