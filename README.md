@@ -166,7 +166,6 @@ cd ai-natural-language-tests
 pip install -r requirements.txt
 
 echo "OPENAI_API_KEY=sk-your-key" > .env
-echo "OPENROUTER_API_KEY=sk-your-key" >> .env
 
 npm install cypress@15.8.1 --save-dev
 
