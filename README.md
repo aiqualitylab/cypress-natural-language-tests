@@ -2,6 +2,8 @@
 
 An AI-powered tool that generates **Cypress** and **Playwright** end-to-end tests from natural language requirements using OpenAI's GPT-4, LangChain, LangGraph workflows, and vector store pattern learning.
 
+[![CI](https://github.com/aiqualitylab/ai-natural-language-tests/actions/workflows/ci.yml/badge.svg)](https://github.com/aiqualitylab/ai-natural-language-tests/actions/workflows/ci.yml)
+
 ## Workflow Overview
 
 <p align="center">
